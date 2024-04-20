@@ -9,7 +9,10 @@ import numpy as np
 import gc
 from crip.io import imwriteRaw
 from crip.io import imwriteTiff
+<<<<<<< HEAD
 
+=======
+>>>>>>> 162c9948f6c686bff82a0f9a35bb376961b8866d
 #所有函数以单词首字母大写命名，不加连字符；例如GenerateHammingKernel
 #所有变量以小写单词加连字符分隔命名，例如dect_elem_width
 #变量命名意义要清晰，不要是单个字母，会看不懂
@@ -776,7 +779,11 @@ def ReadConfigFile(file_path):
     # 替换为你的JSONC文件路径
     json_data = load_jsonc(file_path)
     # 现在，json_data包含了从JSONC文件中解析出的数据
+<<<<<<< HEAD
     # print(json_data) 
+=======
+    # print(json_data)
+>>>>>>> 162c9948f6c686bff82a0f9a35bb376961b8866d
     return json_data
     
 
