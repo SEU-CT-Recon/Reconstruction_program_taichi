@@ -9,6 +9,8 @@ import numpy as np
 import gc
 from crip.io import imwriteRaw
 from crip.io import imwriteTiff
+
+#v1
 #所有函数以单词首字母大写命名，不加连字符；例如GenerateHammingKernel
 #所有变量以小写单词加连字符分隔命名，例如dect_elem_width
 #变量命名意义要清晰，不要是单个字母，会看不懂
