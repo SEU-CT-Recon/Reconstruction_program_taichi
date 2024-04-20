@@ -9,10 +9,6 @@ import numpy as np
 import gc
 from crip.io import imwriteRaw
 from crip.io import imwriteTiff
-<<<<<<< HEAD
-
-=======
->>>>>>> 162c9948f6c686bff82a0f9a35bb376961b8866d
 #所有函数以单词首字母大写命名，不加连字符；例如GenerateHammingKernel
 #所有变量以小写单词加连字符分隔命名，例如dect_elem_width
 #变量命名意义要清晰，不要是单个字母，会看不懂
@@ -21,7 +17,6 @@ from crip.io import imwriteTiff
 #ToDo: 目前GenerateHammingKernel等函数的形式参数还没有跟self里的变量名统一，你给改下
 #这个不影响结果，但是要改下，保证可读性
 #然后加上cone beam 的功能，新的参数命名按照上述规则
-
 PI = 3.1415926536
 
 def run_mgfbp(file_path):
