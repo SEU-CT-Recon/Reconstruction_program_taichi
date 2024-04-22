@@ -9,8 +9,6 @@ import numpy as np
 import gc
 from crip.io import imwriteRaw
 from crip.io import imwriteTiff
-
-#v1
 #所有函数以单词首字母大写命名，不加连字符；例如GenerateHammingKernel
 #所有变量以小写单词加连字符分隔命名，例如dect_elem_width
 #变量命名意义要清晰，不要是单个字母，会看不懂
@@ -19,6 +17,7 @@ from crip.io import imwriteTiff
 #ToDo: 目前GenerateHammingKernel等函数的形式参数还没有跟self里的变量名统一，你给改下
 #这个不影响结果，但是要改下，保证可读性
 #然后加上cone beam 的功能，新的参数命名按照上述规则
+
 PI = 3.1415926536
 
 def run_mgfbp(file_path):
@@ -61,7 +60,7 @@ class Mgfbp:
         #Main function for reconstruction
         self.InitializeArrays()  
         self.InitializeReconKernel()
-        self.file_processed_count = 0
+        self.file_processed_count = 0;
         for file in os.listdir(self.input_dir):
             if re.match(self.input_files_pattern, file):
                 if self.ReadSinogram(file):
@@ -74,6 +73,7 @@ class Mgfbp:
                     print('Filtering sinogram ...')
                     self.FilterSinogram()
                     self.SaveFilteredSinogram()
+                    
                     
                     print('Back Projection ...')
                     self.BackProjectionPixelDriven(self.dect_elem_count_vertical_actual, self.img_dim, self.dect_elem_count_horizontal, \
@@ -204,6 +204,7 @@ class Mgfbp:
         else:
             self.apply_gauss_vertical = False
             self.dect_elem_vertical_gauss_filter_size = 0.0001
+            
         self.array_kernel_gauss_vertical_taichi = ti.field(dtype=ti.f32, shape=2*self.dect_elem_count_vertical_actual-1)
             
         
@@ -375,25 +376,27 @@ class Mgfbp:
         
         
     @ti.kernel
-    def GenerateHammingKernel(self,dect_elem_count_horizontal:ti.i32,dect_elem_width:ti.f32,kernel_param:ti.f32,source_dect_dis:ti.f32,array_recon_kernel_taichi:ti.template(),curved_dect:ti.i32):
+    def GenerateHammingKernel(self,dect_elem_count_horizontal:ti.i32,dect_elem_width:ti.f32,kernel_param:ti.f32,\
+                              source_dect_dis:ti.f32,array_recon_kernel_taichi:ti.template(),curved_dect:ti.i32):
         #计算hamming核分两步处理
+        n = 0
         bias = dect_elem_count_horizontal - 1
         t = kernel_param
         for i in ti.ndrange(2 * dect_elem_count_horizontal - 1):  
-            n = i-bias
+            n = i - bias
             #part 1 ramp核
-            if n==0:
-                array_recon_kernel_taichi[n+bias] = t / (4 * dect_elem_width * dect_elem_width)
-            elif n%2==0:
-                array_recon_kernel_taichi[n+bias] = 0
+            if n == 0:
+                array_recon_kernel_taichi[i] = t / (4 * dect_elem_width * dect_elem_width)
+            elif n % 2 == 0:
+                array_recon_kernel_taichi[i] = 0
             else:
                 if curved_dect:
-                    array_recon_kernel_taichi[n+bias] = -t / (PI * PI * source_dect_dis * source_dect_dis * ti.sin(n * dect_elem_width / source_dect_dis) * ti.sin(n * dect_elem_width / source_dect_dis))
+                    array_recon_kernel_taichi[i] = -t / (PI * PI * (source_dect_dis **2) * (ti.math.sin( float(n) * dect_elem_width / source_dect_dis) **2))
                 else:
-                    array_recon_kernel_taichi[n+bias] = -t / (PI * PI * n * n * dect_elem_width * dect_elem_width)
+                    array_recon_kernel_taichi[i] = -t / (PI * PI * (float(n) **2) * (dect_elem_width **2))
             #part 2 cosine核
             sgn = 1 if n % 2 == 0 else -1
-            array_recon_kernel_taichi[n+bias] += (1-t)*(sgn/(2 * PI * dect_elem_width * dect_elem_width)*(1/(1 + 2 * n)+ 1 / (1 - 2 * n))- 1 / (PI * PI * dect_elem_width * dect_elem_width) * (1 / (1 + 2 * n) / (1 + 2 * n) + 1 / (1 - 2 * n) / (1 - 2 * n)))
+            array_recon_kernel_taichi[i] += (1-t)*(sgn/(2 * PI * dect_elem_width * dect_elem_width)*(1/(1 + 2 * n)+ 1 / (1 - 2 * n))- 1 / (PI * PI * dect_elem_width * dect_elem_width) * (1 / (1 + 2 * n) / (1 + 2 * n) + 1 / (1 - 2 * n) / (1 - 2 * n)))
 
     @ti.kernel
     def GenerateGassianKernel(self,dect_elem_count_horizontal:ti.i32,dect_elem_width:ti.f32,kernel_param:ti.f32,array_kernel_gauss_taichi:ti.template()):
@@ -440,7 +443,7 @@ class Mgfbp:
             for s in ti.ndrange(dect_elem_count_vertical_actual):
                 v_actual = array_v_taichi[s]
                 if curved_dect:
-                    img_sgm_taichi[s,i,j] = img_sgm_taichi[s,i,j] * source_dect_dis * ti.cos(u_actual/source_dect_dis) \
+                    img_sgm_taichi[s,i,j] = img_sgm_taichi[s,i,j] * source_dect_dis * ti.math.cos(u_actual/source_dect_dis) \
                         * source_dect_dis / ((source_dect_dis**2 + v_actual**2)**0.5)
                 else:
                     img_sgm_taichi[s,i,j]=(img_sgm_taichi[s,i,j] * source_dect_dis * source_dect_dis ) \
@@ -776,11 +779,7 @@ def ReadConfigFile(file_path):
     # 替换为你的JSONC文件路径
     json_data = load_jsonc(file_path)
     # 现在，json_data包含了从JSONC文件中解析出的数据
-<<<<<<< HEAD
-    # print(json_data) 
-=======
     # print(json_data)
->>>>>>> 162c9948f6c686bff82a0f9a35bb376961b8866d
     return json_data
     
 
