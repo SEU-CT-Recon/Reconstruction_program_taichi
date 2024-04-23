@@ -59,7 +59,7 @@ class Mgfbp:
     def MainFunction(self):
         #Main function for reconstruction
         self.InitializeArrays()  
-        self.InitializeReconKernel()
+        self.InitializeReconKernel()    
         self.file_processed_count = 0;
         for file in os.listdir(self.input_dir):
             if re.match(self.input_files_pattern, file):
@@ -393,7 +393,10 @@ class Mgfbp:
                 array_recon_kernel_taichi[i] = 0
             else:
                 if curved_dect:
-                    array_recon_kernel_taichi[i] = -t / (PI * PI * (source_dect_dis **2) * (ti.math.sin( float(n) * dect_elem_width / source_dect_dis) **2))
+                    temp_val = float(n) * dect_elem_width / source_dect_dis
+                    array_recon_kernel_taichi[i] = -t / (PI * PI * (source_dect_dis **2) * (temp_val - temp_val**3/3/2/1 + temp_val**5/5/4/3/2/1)**2 )
+                    #use taylor expansion to replace the built-in taichi.sin function
+                    #this function leads to 1% bias in calculation
                 else:
                     array_recon_kernel_taichi[i] = -t / (PI * PI * (float(n) **2) * (dect_elem_width **2))
             #part 2 cosine核
