@@ -47,7 +47,7 @@ def run_mgfbp(file_path):
         print(f"Time cost：{execution_time:.3} sec\n")# 打印执行时间（以秒为单位）
     else:
         print(f"\nWarning: Did not find files like {fbp.input_files_pattern:s} in {fbp.input_dir:s}.")
-        print("No images are reconstructed!")
+        print("No images are reconstructed!\n")
     del fbp #delete the fbp object
     gc.collect()# 手动触发垃圾回收
     ti.reset()#free gpu ram
@@ -96,6 +96,8 @@ class Mgfbp:
         self.input_files_pattern = config_dict['InputFiles']
         self.output_file_prefix = config_dict['OutputFilePrefix']
         self.output_file_replace = config_dict['OutputFileReplace']
+        
+        #NEW define output file format: tif or raw
         if 'OutputFileFormat' in config_dict:
             self.output_file_format = config_dict['OutputFileFormat']
             if self.output_file_format == 'raw' \

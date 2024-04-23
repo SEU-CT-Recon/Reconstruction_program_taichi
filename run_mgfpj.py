@@ -40,10 +40,10 @@ def run_mgfpj(file_path):
     execution_time = end_time - start_time# 计算执行时间
     if fpj.file_processed_count > 0:
         print(f"\nA total of {fpj.file_processed_count:d} files are forward projected!")
-        print(f"Time cost：{execution_time:.3} sec")# 打印执行时间（以秒为单位）
+        print(f"Time cost：{execution_time:.3} sec\n")# 打印执行时间（以秒为单位）
     else:
         print(f"\nWarning: Did not find files like {fpj.input_files_pattern:s} in {fpj.input_dir:s}.")
-        print("No images are  forward projected!")
+        print("No images are  forward projected!\n")
     gc.collect()# 手动触发垃圾回收
     ti.reset()#free gpu ram
     return img_sgm
