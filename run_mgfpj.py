@@ -62,6 +62,7 @@ class Mgfpj:
         for file in os.listdir(self.input_dir):
             if re.match(self.input_files_pattern, file):
                 if self.ReadImage(file):
+                    print('\nForward projecting %s ...' % self.input_path)
                     self.file_processed_count += 1
                     for v_idx in range(self.dect_elem_count_vertical):
                   
@@ -78,7 +79,8 @@ class Mgfpj:
                         self.BinSinogram(self.img_sgm_large_taichi,self.img_sgm_taichi,\
                                          self.dect_elem_count_horizontal,self.view_num,self.oversample_size)
                         self.TransferToRAM(v_idx)
-                    
+                        
+                    print('\nSaving to %s !' % self.output_path)
                     self.SaveSinogram()
                         
 
