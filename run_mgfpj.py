@@ -78,6 +78,9 @@ class Mgfpj:
                             
                         self.BinSinogram(self.img_sgm_large_taichi,self.img_sgm_taichi,\
                                          self.dect_elem_count_horizontal,self.view_num,self.oversample_size)
+                        if self.add_possion_noise:
+                            self.AddPossionNoise(self.img_sgm_taichi,self.photon_number,self.dect_elem_count_horizontal,self.view_num)
+                            
                         self.TransferToRAM(v_idx)
                         
                     print('\nSaving to %s !' % self.output_path)
@@ -286,6 +289,14 @@ class Mgfpj:
             self.img_center_z = self.img_voxel_height * (self.img_dim_z - 1) / 2.0 * np.sign(self.helical_pitch)
             print("Did not find image center along Z direction in the config file!")
             print("For helical scans, the first view begins with the bottom or the top of the image object; the image center along Z direction is set accordingly!")
+            
+        #NEW! add poisson noise to generated sinogram
+        if 'PhotonNumber' in config_dict:
+            self.add_possion_noise = True
+            self.photon_number = config_dict['PhotonNumber']
+        else:
+            self.add_possion_noise = False
+            self.photon_number = 0
 
         self.img_image = np.zeros((self.img_dim_z,self.img_dim,self.img_dim),dtype = np.float32)
         #for sgm in ram, we initialize a 3D buffer 
@@ -325,7 +336,7 @@ class Mgfpj:
         # This new version of code assumes that the gantry stays the same 
         # while the image object rotates
         # this can simplify the calculation
-        
+       
         #define aliases
         sid = source_isocenter_dis # alias
         sdd = source_dect_dis # alias
@@ -460,6 +471,16 @@ class Mgfpj:
             return True
     def TransferToRAM(self,v_idx):
         self.img_sgm[v_idx, :, : ]= self.img_sgm_taichi.to_numpy()
+    
+    @ti.kernel
+    def AddPossionNoise(self,img_sgm_taichi:ti.template(),photon_number:ti.f32,dect_elem_count_horizontal:ti.i32,\
+                    view_num:ti.i32):
+        for u_idx,angle_idx in ti.ndrange(dect_elem_count_horizontal, view_num):
+            transmitted_photon_number = photon_number * ti.exp(-img_sgm_taichi[0,angle_idx,u_idx]) 
+            transmitted_photon_number = transmitted_photon_number + ti.randn() * ti.sqrt(transmitted_photon_number)
+            if transmitted_photon_number <= 0:
+                transmitted_photon_number = 1e-6
+            img_sgm_taichi[0,angle_idx,u_idx] = ti.log(photon_number / transmitted_photon_number)
         
     def SaveSinogram(self):
         if self.output_file_form == 'sinogram':
