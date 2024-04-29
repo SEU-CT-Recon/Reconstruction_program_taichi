@@ -568,6 +568,7 @@ class Mgfbp:
         #计算重建图并保存到img_recon_taichi中
         for i_x, i_y in ti.ndrange(img_dim, img_dim):
             for i_z in ti.ndrange(img_dim_z):
+                img_recon_taichi[i_z, i_y, i_x] = 0.0
                 x_after_rot = img_pix_size * (i_x - (img_dim - 1) / 2.0) + img_center_x
                 y_after_rot = - img_pix_size * (i_y - (img_dim - 1) / 2.0) + img_center_y
                 z = (i_z - (img_dim_z - 1) / 2.0) * img_voxel_height + img_center_z
@@ -677,6 +678,7 @@ class Mgfbp:
                     * self.dect_elem_count_horizontal * 4
                 temp_buffer = imreadRaw(self.input_path, height = self.dect_elem_count_vertical_actual, width = self.dect_elem_count_horizontal,\
                                          offset = file_offset, gap = file_gap, nSlice = self.sgm_height)
+                #print(self.dect_elem_count_vertical_actual,self.dect_elem_count_horizontal, self.sgm_height)
                 temp_buffer = np.transpose(temp_buffer,[1,0,2])
     
                 

@@ -526,7 +526,7 @@ def imreadRaw(path: str, height: int, width: int, dtype = np.float32, nSlice: in
                 fp.seek(gap, os.SEEK_CUR)
     return arr
 
-def imaddRaw(img, path: str, dtype=None):
+def imaddRaw(img, path: str, dtype=None, idx = 1):
     '''
         Write add file. Convert dtype with `dtype != None`.
     '''
@@ -534,8 +534,12 @@ def imaddRaw(img, path: str, dtype=None):
     if dtype is not None:
         img = img.astype(dtype)
 
-    with open(path, 'ab') as fp:
-        fp.write(img.flatten().tobytes())
+    if idx == 0:
+        with open(path, 'wb') as fp:
+            fp.write(img.flatten().tobytes())
+    else:
+        with open(path, 'ab') as fp:
+            fp.write(img.flatten().tobytes())
 
 
 def ReadConfigFile(file_path):
