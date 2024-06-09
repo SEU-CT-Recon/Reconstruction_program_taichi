@@ -95,6 +95,9 @@ class Mgfbp_helical(Mgfbp):
     
     def MainFunction(self):
         self.file_processed_count = 0
+        if not os.path.exists(self.input_dir + '/temp'):
+            os.mkdir(self.input_dir + '/temp')
+            
         for file in os.listdir(self.input_dir):
             if re.match(self.input_files_pattern, file):
                 if self.ReadSinogram(file): # 读取正弦图
@@ -116,7 +119,7 @@ class Mgfbp_helical(Mgfbp):
                                                    z_idx)
                         
                         
-                        #imaddRaw(self.img_sgm_taichi.to_numpy(),'sgm_rebin.raw', idx = z_idx)
+                        imaddRaw(self.img_sgm_taichi.to_numpy(),self.input_dir + '/temp/sgm_rebin.raw', idx = z_idx)
                             
                             
                         self.CalculateAddedImgRotation(z_idx)
