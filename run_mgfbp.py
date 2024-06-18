@@ -9,14 +9,6 @@ import numpy as np
 import gc
 from crip.io import imwriteRaw
 from crip.io import imwriteTiff
-#所有函数以单词首字母大写命名，不加连字符；例如GenerateHammingKernel
-#所有变量以小写单词加连字符分隔命名，例如dect_elem_width
-#变量命名意义要清晰，不要是单个字母，会看不懂
-#所有一维数组加上array_前缀，如果是taichi类型，就以taichi结尾，例如array_u_taichi
-#所有二维及以上维数组加上img_前缀，如果是taichi类型，就以taichi结尾，例如img_sgm_taichi
-#ToDo: 目前GenerateHammingKernel等函数的形式参数还没有跟self里的变量名统一，你给改下
-#这个不影响结果，但是要改下，保证可读性
-#然后加上cone beam 的功能，新的参数命名按照上述规则
 
 PI = 3.1415926536
 
@@ -39,7 +31,7 @@ def run_mgfbp(file_path):
     # Ensure output directory exists; if not, create the directory
     if not os.path.exists(fbp.output_dir):
         os.makedirs(fbp.output_dir)
-    img_recon = fbp.MainFunction()
+    img_recon = fbp.MainFunction()#recontructed image is returned by fbp.MainFunction()
     end_time = time.time()# record end time point
     execution_time = end_time - start_time# 计算执行时间
     if fbp.file_processed_count > 0:
@@ -58,13 +50,13 @@ def run_mgfbp(file_path):
 class Mgfbp:
     def MainFunction(self):
         #Main function for reconstruction
-        self.InitializeArrays()  
-        self.InitializeReconKernel()    
-        self.file_processed_count = 0;
+        self.InitializeArrays()#initialize arrays
+        self.InitializeReconKernel()#initialize reconstruction kernel
+        self.file_processed_count = 0;#record the number of files processed
         for file in os.listdir(self.input_dir):
-            if re.match(self.input_files_pattern, file):
+            if re.match(self.input_files_pattern, file):#match the file pattern
                 if self.ReadSinogram(file):
-                    self.file_processed_count +=1 
+                    self.file_processed_count += 1 
                     print('\nReconstructing %s ...' % self.input_path)
                     self.WeightSgm(self.dect_elem_count_vertical_actual,self.short_scan,self.curved_dect,\
                                    self.total_scan_angle,self.view_num,self.dect_elem_count_horizontal,\
@@ -249,7 +241,7 @@ class Mgfbp:
                 self.bool_apply_pmatrix = 1
                 print("--Pmatrix applied")
             else:
-                print(f"ERROR: PMatrixFile has no member named 'Value'!")
+                print("ERROR: PMatrixFile has no member named 'Value'!")
                 sys.exit()
         else:
             self.bool_apply_pmatrix = 0
@@ -657,7 +649,7 @@ class Mgfbp:
         self.input_path = os.path.join(self.input_dir, file)
         self.output_file = re.sub(self.output_file_replace[0], self.output_file_replace[1], file)
         if self.output_file == file:
-            #did not file the string in file, so that output_file and file are the same
+            #did not find the string in file, so that output_file and file are the same
             print(f"ERROR: did not file string '{self.output_file_replace[0]}' to replace in '{self.output_file}'")
             sys.exit()
         else:
