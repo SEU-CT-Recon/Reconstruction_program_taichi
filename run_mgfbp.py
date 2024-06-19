@@ -58,6 +58,9 @@ class Mgfbp:
                 if self.ReadSinogram(file):
                     self.file_processed_count += 1 
                     print('\nReconstructing %s ...' % self.input_path)
+                    if self.bool_bh_correction:
+                        self.BHCorrection(self.dect_elem_count_vertical_actual, self.view_num, self.dect_elem_count_horizontal,self.img_sgm_taichi,\
+                                          self.array_bh_coefficients_taichi,self.bh_corr_order)
                     self.WeightSgm(self.dect_elem_count_vertical_actual,self.short_scan,self.curved_dect,\
                                    self.total_scan_angle,self.view_num,self.dect_elem_count_horizontal,\
                                        self.source_dect_dis,self.img_sgm_taichi,\
@@ -245,8 +248,36 @@ class Mgfbp:
                 sys.exit()
         else:
             self.bool_apply_pmatrix = 0
-        
-        
+            
+        ## Change the projection matrix values if vertical recon range is applied
+        ## The original pmatrix need to be modified
+        if self.bool_apply_pmatrix:
+            for view_idx in range(self.view_num):
+                pmatrix_this_view = self.array_pmatrix[(view_idx*12):(view_idx+1)*12]#get the pmatrix for this view
+                pmatrix_this_view = np.reshape(pmatrix_this_view,[3,4])#reshape it to be 3x4 matrix
+                matrix_A = np.linalg.inv(pmatrix_this_view[:,0:3])#matrix A is the inverse of the 3x3 matrix from the first three columns
+                x_s = - np.matmul(matrix_A,pmatrix_this_view[:,3]).reshape([3,1])#calculate the source position
+                e_v = matrix_A[:,1]#calculate the unit vector along detector vertical direction
+                matrix_A[:,2] = matrix_A[:,2] + np.multiply(self.dect_elem_vertical_recon_range_begin, e_v)
+                #calculate the new x_do - x_s
+                
+                matrix_A_inverse = np.linalg.inv(matrix_A) #reculate the inverse of matrix A
+                pmatrix_this_view = np.append(matrix_A_inverse, -np.matmul(matrix_A_inverse,x_s), axis = 1)#get the new pmatrix for this view
+                pmatrix_this_view = np.reshape(pmatrix_this_view,[12,1])#reshape the matrix to be a vector
+                self.array_pmatrix[(view_idx*12):(view_idx+1)*12] = pmatrix_this_view[:,0] #update the pmatrix array
+            self.array_pmatrix_taichi.from_numpy(self.array_pmatrix)#update the taichi array
+            
+        ######## NEW! Beam Hardening Correction Coefficients ########
+        if 'BeamHardeningCorrectionCoefficients' in config_dict:
+            print("--BH correction applied")
+            self.bool_bh_correction = True
+            self.array_bh_coefficients = np.array(config_dict['BeamHardeningCorrectionCoefficients'],dtype = np.float32)
+            self.bh_corr_order = len(self.array_bh_coefficients)
+            self.array_bh_coefficients_taichi = ti.field(dtype=ti.f32, shape = self.bh_corr_order)
+            self.array_bh_coefficients_taichi.from_numpy(self.array_bh_coefficients)
+        else:
+            self.bool_bh_correction = False
+                
         ######## CT scan geometries ########        
         self.source_isocenter_dis = config_dict['SourceIsocenterDistance']
         self.source_dect_dis = config_dict['SourceDetectorDistance']
@@ -429,6 +460,16 @@ class Mgfbp:
         for i in ti.ndrange(dect_elem_count_horizontal_actual):
             array_u_taichi[i] = flag * (i + dect_elem_begin_idx - (dect_elem_count_horizontal - 1) / 2.0) \
                 * dect_elem_width + dect_offset_horizontal
+                
+    @ti.kernel
+    def BHCorrection(self, dect_elem_count_vertical_actual:ti.i32, view_num:ti.i32, dect_elem_count_horizontal:ti.i32,img_sgm_taichi:ti.template(),\
+                     array_bh_coefficients_taichi:ti.template(),bh_corr_order:ti.i32):
+        #对正弦图做加权，包括fan beam的cos加权和短扫面加权
+        for  i, j,s in ti.ndrange(view_num, dect_elem_count_horizontal, dect_elem_count_vertical_actual):
+            temp_val = 0.0
+            for t in ti.ndrange(bh_corr_order):
+                temp_val = temp_val + array_bh_coefficients_taichi[t] * (img_sgm_taichi[s,i,j]**(t+1))
+            img_sgm_taichi[s,i,j] = temp_val
 
     @ti.kernel
     def WeightSgm(self, dect_elem_count_vertical_actual:ti.i32, short_scan:ti.i32, curved_dect:ti.i32, scan_angle:ti.f32,\

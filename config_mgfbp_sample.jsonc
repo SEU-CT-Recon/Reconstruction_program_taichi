@@ -29,7 +29,7 @@
   
   
   // number of frames
-  "SinogramHeight": 400,
+  "SinogramHeight": 400,// can be omitted is this number is equal to views
   // number of views for reconstruction
   "Views": 400,
   // number of slices in each sinogram file
@@ -95,5 +95,15 @@
 
   // (OPTIONAL) set water mu to convert the pixel values to HU
   // unit: mm^-1
-  "WaterMu": 0.02  
+  "WaterMu": 0.02, 
+
+  "PMatrixFile": "XXX.jsonc",
+
+  "InputFileForm":"post_log_images",
+   
+  "OutputFileFormat":"tif",
+   
+  "DetectorElementVerticalReconRange":[500,700],
+   
+  "BeamHardeningCorrectionCoefficients":[1,0.03,0.02]
 }
