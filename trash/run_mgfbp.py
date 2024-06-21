@@ -14,7 +14,7 @@ PI = 3.1415926536
 
 def run_mgfbp(file_path):
     ti.reset()
-    ti.init(arch=ti.gpu, device_memory_fraction=0.95)#define device memeory utilization fraction
+    ti.init(arch=ti.gpu, device_memory_fraction=0.95)
     print('Performing FBP from MandoCT-Taichi (ver 0.1) ...')
     # record start time point
     start_time = time.time() 
@@ -59,12 +59,12 @@ class Mgfbp:
                     self.file_processed_count += 1 
                     print('\nReconstructing %s ...' % self.input_path)
                     if self.bool_bh_correction:
-                        self.BHCorrection(self.dect_elem_count_vertical_actual, self.view_num, self.dect_elem_count_horizontal,self.img_sgm,\
-                                          self.array_bh_coefficients_taichi,self.bh_corr_order)#pass img_sgm directly into this function using unified memory
+                        self.BHCorrection(self.dect_elem_count_vertical_actual, self.view_num, self.dect_elem_count_horizontal,self.img_sgm_taichi,\
+                                          self.array_bh_coefficients_taichi,self.bh_corr_order)
                     self.WeightSgm(self.dect_elem_count_vertical_actual,self.short_scan,self.curved_dect,\
                                    self.total_scan_angle,self.view_num,self.dect_elem_count_horizontal,\
-                                       self.source_dect_dis,self.img_sgm,\
-                                           self.array_u_taichi,self.array_v_taichi,self.array_angel_taichi)#pass img_sgm directly into this function using unified memory
+                                       self.source_dect_dis,self.img_sgm_taichi,\
+                                           self.array_u_taichi,self.array_v_taichi,self.array_angel_taichi)
                     print('Filtering sinogram ...')
                     self.FilterSinogram()
                     self.SaveFilteredSinogram()
@@ -382,19 +382,20 @@ class Mgfbp:
         ######### initialize taichi components ########
         #img_sgm_filtered_taichi存储卷积后的正弦图
         self.img_sgm_filtered_taichi = ti.field(dtype=ti.f32, shape=(self.dect_elem_count_vertical_actual,self.view_num, self.dect_elem_count_horizontal))
-        #img_sgm_filtered_taichi 纵向卷积后正弦图的中间结果，then apply horizontal convolution
         
+            
+        #img_sgm_filtered_taichi 纵向卷积后正弦图的中间结果，then apply horizontal convolution
         if self.apply_gauss_vertical:
             self.img_sgm_filtered_intermediate_taichi = ti.field(dtype=ti.f32, shape=(self.dect_elem_count_vertical_actual,self.view_num, self.dect_elem_count_horizontal))
         else:
             self.img_sgm_filtered_intermediate_taichi = ti.field(dtype=ti.f32, shape=(1,1,1))
-            #if vertical gauss filter is not applied, initialize this intermediate sgm with a small size to save GPU memory
         
         self.img_recon_taichi = ti.field(dtype=ti.f32, shape=(self.img_dim_z,self.img_dim, self.img_dim),order='ikj')
         #img_recon_taichi is the reconstructed img
         self.array_angel_taichi = ti.field(dtype=ti.f32, shape=self.view_num)
         #angel_taichi存储旋转角度，且经过计算之后以弧度制表示
-        
+        self.img_sgm_taichi = ti.field(dtype=ti.f32, shape=(self.dect_elem_count_vertical_actual, self.view_num, self.dect_elem_count_horizontal))
+        #存储读取的正弦图
         self.array_recon_kernel_taichi = ti.field(dtype=ti.f32, shape=2*self.dect_elem_count_horizontal-1)
         #存储用于对正弦图进行卷积的核
         self.array_u_taichi = ti.field(dtype=ti.f32,shape=self.dect_elem_count_horizontal)
@@ -466,10 +467,10 @@ class Mgfbp:
                 * dect_elem_width + dect_offset_horizontal
                 
     @ti.kernel
-    def BHCorrection(self, dect_elem_count_vertical_actual:ti.i32, view_num:ti.i32, dect_elem_count_horizontal:ti.i32,img_sgm_taichi:ti.types.ndarray(dtype=ti.f32, ndim=3),\
+    def BHCorrection(self, dect_elem_count_vertical_actual:ti.i32, view_num:ti.i32, dect_elem_count_horizontal:ti.i32,img_sgm_taichi:ti.template(),\
                      array_bh_coefficients_taichi:ti.template(),bh_corr_order:ti.i32):
         #对正弦图做加权，包括fan beam的cos加权和短扫面加权
-        for  i, j, s in ti.ndrange(view_num, dect_elem_count_horizontal, dect_elem_count_vertical_actual):
+        for  i, j,s in ti.ndrange(view_num, dect_elem_count_horizontal, dect_elem_count_vertical_actual):
             temp_val = 0.0
             for t in ti.ndrange(bh_corr_order):
                 temp_val = temp_val + array_bh_coefficients_taichi[t] * (img_sgm_taichi[s,i,j]**(t+1))#apply ploynomial calculation
@@ -477,7 +478,7 @@ class Mgfbp:
 
     @ti.kernel
     def WeightSgm(self, dect_elem_count_vertical_actual:ti.i32, short_scan:ti.i32, curved_dect:ti.i32, scan_angle:ti.f32,\
-                  view_num:ti.i32, dect_elem_count_horizontal:ti.i32, source_dect_dis:ti.f32,img_sgm_taichi:ti.types.ndarray(dtype=ti.f32, ndim=3),\
+                  view_num:ti.i32, dect_elem_count_horizontal:ti.i32, source_dect_dis:ti.f32,img_sgm_taichi:ti.template(),\
                       array_u_taichi:ti.template(),array_v_taichi:ti.template(),array_angel_taichi:ti.template()):
         #对正弦图做加权，包括fan beam的cos加权和短扫面加权
         for  i, j in ti.ndrange(view_num, dect_elem_count_horizontal):
@@ -533,7 +534,7 @@ class Mgfbp:
                 
     @ti.kernel
     def ConvolveSgmAndKernel(self, dect_elem_count_vertical_actual:ti.i32, view_num:ti.i32, \
-                             dect_elem_count_horizontal:ti.i32, dect_elem_width:ti.f32, img_sgm_taichi:ti.types.ndarray(dtype=ti.f32, ndim=3), \
+                             dect_elem_count_horizontal:ti.i32, dect_elem_width:ti.f32, img_sgm_taichi:ti.template(), \
                                  array_recon_kernel_taichi:ti.template(),array_kernel_gauss_vertical_taichi:ti.template(),\
                                      dect_elem_height:ti.f32, apply_gauss_vertical:ti.i32,img_sgm_filtered_intermediate_taichi:ti.template(),\
                                          img_sgm_filtered_taichi:ti.template()):
@@ -721,11 +722,9 @@ class Mgfbp:
     
                 
             self.img_sgm = temp_buffer[:,0:self.view_num,:]
-            self.img_sgm = np.ascontiguousarray(self.img_sgm) #only contiguous arrays can be passed to ti kernel functions
-            
             del temp_buffer
-            #no longer need this: self.img_sgm_taichi.from_numpy(self.img_sgm)
-            #since img_sgm can be directly passed to ti kernel functions using unified memory
+            self.img_sgm_taichi.from_numpy(self.img_sgm)
+            #将正弦图sgm存储到taichi专用的数组中帮助加速程序
             return True
     
     def InitializeArrays(self):
@@ -768,10 +767,9 @@ class Mgfbp:
             
     def FilterSinogram(self):
         self.ConvolveSgmAndKernel(self.dect_elem_count_vertical_actual,self.view_num,self.dect_elem_count_horizontal,\
-                                  self.dect_elem_width,self.img_sgm,self.array_recon_kernel_taichi,\
+                                  self.dect_elem_width,self.img_sgm_taichi,self.array_recon_kernel_taichi,\
                                       self.array_kernel_gauss_vertical_taichi,self.dect_elem_height, self.apply_gauss_vertical,
                                       self.img_sgm_filtered_intermediate_taichi, self.img_sgm_filtered_taichi)
-        #pass img_sgm directly into this function using unified memory
         #用hamming核计算出的array_recon_kernel_taichi计算卷积后的正弦图img_sgm_filtered_taichi
         
     def SaveFilteredSinogram(self):

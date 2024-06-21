@@ -60,11 +60,11 @@ class Mgfbp:
                     print('\nReconstructing %s ...' % self.input_path)
                     if self.bool_bh_correction:
                         self.BHCorrection(self.dect_elem_count_vertical_actual, self.view_num, self.dect_elem_count_horizontal,self.img_sgm,\
-                                          self.array_bh_coefficients_taichi,self.bh_corr_order)#pass img_sgm directly into this function using unified memory
+                                          self.array_bh_coefficients_taichi,self.bh_corr_order)
                     self.WeightSgm(self.dect_elem_count_vertical_actual,self.short_scan,self.curved_dect,\
                                    self.total_scan_angle,self.view_num,self.dect_elem_count_horizontal,\
                                        self.source_dect_dis,self.img_sgm,\
-                                           self.array_u_taichi,self.array_v_taichi,self.array_angel_taichi)#pass img_sgm directly into this function using unified memory
+                                           self.array_u_taichi,self.array_v_taichi,self.array_angel_taichi)
                     print('Filtering sinogram ...')
                     self.FilterSinogram()
                     self.SaveFilteredSinogram()
@@ -388,12 +388,18 @@ class Mgfbp:
             self.img_sgm_filtered_intermediate_taichi = ti.field(dtype=ti.f32, shape=(self.dect_elem_count_vertical_actual,self.view_num, self.dect_elem_count_horizontal))
         else:
             self.img_sgm_filtered_intermediate_taichi = ti.field(dtype=ti.f32, shape=(1,1,1))
-            #if vertical gauss filter is not applied, initialize this intermediate sgm with a small size to save GPU memory
         
         self.img_recon_taichi = ti.field(dtype=ti.f32, shape=(self.img_dim_z,self.img_dim, self.img_dim),order='ikj')
         #img_recon_taichi is the reconstructed img
         self.array_angel_taichi = ti.field(dtype=ti.f32, shape=self.view_num)
         #angel_taichi存储旋转角度，且经过计算之后以弧度制表示
+        
+        
+        #self.img_sgm_taichi = ti.field(dtype=ti.f32, shape=(self.dect_elem_count_vertical_actual, self.view_num, self.dect_elem_count_horizontal))
+        #存储读取的正弦图
+        
+        #mark 
+        #self.img_sgm_taichi = ti.ndarray(dtype=ti.f32, shape=(self.dect_elem_count_vertical_actual, self.view_num, self.dect_elem_count_horizontal))
         
         self.array_recon_kernel_taichi = ti.field(dtype=ti.f32, shape=2*self.dect_elem_count_horizontal-1)
         #存储用于对正弦图进行卷积的核
@@ -721,11 +727,14 @@ class Mgfbp:
     
                 
             self.img_sgm = temp_buffer[:,0:self.view_num,:]
-            self.img_sgm = np.ascontiguousarray(self.img_sgm) #only contiguous arrays can be passed to ti kernel functions
+            
+            #mark 
+            
+            self.img_sgm = np.ascontiguousarray(self.img_sgm)
             
             del temp_buffer
-            #no longer need this: self.img_sgm_taichi.from_numpy(self.img_sgm)
-            #since img_sgm can be directly passed to ti kernel functions using unified memory
+            #self.img_sgm_taichi.from_numpy(self.img_sgm) #mark
+            #将正弦图sgm存储到taichi专用的数组中帮助加速程序
             return True
     
     def InitializeArrays(self):
@@ -771,7 +780,6 @@ class Mgfbp:
                                   self.dect_elem_width,self.img_sgm,self.array_recon_kernel_taichi,\
                                       self.array_kernel_gauss_vertical_taichi,self.dect_elem_height, self.apply_gauss_vertical,
                                       self.img_sgm_filtered_intermediate_taichi, self.img_sgm_filtered_taichi)
-        #pass img_sgm directly into this function using unified memory
         #用hamming核计算出的array_recon_kernel_taichi计算卷积后的正弦图img_sgm_filtered_taichi
         
     def SaveFilteredSinogram(self):

@@ -123,6 +123,10 @@ class Mgfbp_helical(Mgfbp):
                             
                             
                         self.CalculateAddedImgRotation(z_idx)
+                        
+                        if self.bool_bh_correction:
+                            self.BHCorrection(self.dect_elem_count_vertical_actual, self.view_num, self.dect_elem_count_horizontal,self.img_sgm_taichi,\
+                                              self.array_bh_coefficients_taichi,self.bh_corr_order)
                             
                         self.WeightSgm(self.dect_elem_count_vertical_actual,self.short_scan,self.curved_dect,\
                                     self.total_scan_angle,self.view_num,self.dect_elem_count_horizontal,\
