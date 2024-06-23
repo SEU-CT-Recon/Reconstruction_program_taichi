@@ -81,4 +81,6 @@
   "OversampleSize": 2,
   // accelerate projection by increasing the number of step size below
   "ForwardProjectionStepSize": 0.2  // Mandoct ver1.3 new feature!!!
+
+  "OutputFileForm": "sinogram" // sinogram or post_log_images
 }

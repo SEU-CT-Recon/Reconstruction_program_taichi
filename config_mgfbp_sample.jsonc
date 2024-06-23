@@ -105,5 +105,7 @@
    
   "DetectorElementVerticalReconRange":[500,700],
    
-  "BeamHardeningCorrectionCoefficients":[1,0.03,0.02]
+  "BeamHardeningCorrectionCoefficients":[1,0.03,0.02], 
+
+  "ReconViewMode":"Coronal" // axial coronal or sagittal
 }

@@ -77,7 +77,7 @@ class Mgfbp:
                                     self.array_u_taichi,self.short_scan,self.cone_beam,self.dect_elem_height,\
                                         self.array_v_taichi,self.img_dim_z,self.img_voxel_height,\
                                             self.img_center_x,self.img_center_y,self.img_center_z,self.curved_dect,\
-                                                self.bool_apply_pmatrix,self.array_pmatrix_taichi)
+                                                self.bool_apply_pmatrix,self.array_pmatrix_taichi, self.recon_view_mode)
     
                     print('Saving to %s !' % self.output_path)
                     self.SaveReconImg()
@@ -291,6 +291,21 @@ class Mgfbp:
         self.img_center = config_dict['ImageCenter']
         self.img_center_x = self.img_center[0]
         self.img_center_y = self.img_center[1]
+        
+        ######## NEW! reconstruction view mode (axial, coronal or sagittal) ########
+        if 'ReconViewMode' in config_dict:
+            temp_str = config_dict['ReconViewMode']
+            if temp_str == 'axial':
+                self.recon_view_mode = 1
+            elif temp_str == 'coronal':
+                self.recon_view_mode = 2
+            elif temp_str == 'sagittal':
+                self.recon_view_mode = 3
+            else:
+                print("ERROR: ReconViewMode can only be axial, coronal or sagittal!")
+                sys.exit()
+        else: 
+            self.recon_view_mode = 1
         
         ######## reconstruction kernel parameters ########
         if 'HammingFilter' in config_dict:
@@ -587,7 +602,7 @@ class Mgfbp:
                                           array_u_taichi:ti.template(), short_scan:ti.i32,cone_beam:ti.i32,dect_elem_height:ti.f32,\
                                               array_v_taichi:ti.template(),img_dim_z:ti.i32,img_voxel_height:ti.f32, \
                                                   img_center_x:ti.f32,img_center_y:ti.f32,img_center_z:ti.f32,curved_dect:ti.i32,\
-                                                      bool_apply_pmatrix:ti.i32, array_pmatrix_taichi:ti.template()):
+                                                      bool_apply_pmatrix:ti.i32, array_pmatrix_taichi:ti.template(), recon_view_mode: ti.i32):
         
         #计算冗余加权系数
         div_factor = 1.0
@@ -602,14 +617,24 @@ class Mgfbp:
                 div_factor = 1.0 / (num_rounds*2.0 + 1.0)
         else:
             div_factor = 1.0 / (num_rounds*2.0)
-        #计算重建图并保存到img_recon_taichi中
+        
         for i_x, i_y in ti.ndrange(img_dim, img_dim):
             for i_z in ti.ndrange(img_dim_z):
                 img_recon_taichi[i_z, i_y, i_x] = 0.0
-                x_after_rot = img_pix_size * (i_x - (img_dim - 1) / 2.0) + img_center_x
-                y_after_rot = - img_pix_size * (i_y - (img_dim - 1) / 2.0) + img_center_y
-                z = (i_z - (img_dim_z - 1) / 2.0) * img_voxel_height + img_center_z
-                      
+                x_after_rot = 0.0; y_after_rot = 0.0; x=0.0; y=0.0;z=0.0;
+                if recon_view_mode == 1: #axial view (from bottom to top)
+                    x_after_rot = img_pix_size * (i_x - (img_dim - 1) / 2.0) + img_center_x
+                    y_after_rot = - img_pix_size * (i_y - (img_dim - 1) / 2.0) + img_center_y
+                    z = (i_z - (img_dim_z - 1) / 2.0) * img_voxel_height + img_center_z
+                elif recon_view_mode == 2: #coronal view (from fron to back)
+                    x_after_rot = img_pix_size * (i_x - (img_dim - 1) / 2.0) + img_center_x
+                    z = - img_pix_size * (i_y - (img_dim - 1) / 2.0) + img_center_z
+                    y_after_rot = - (i_z - (img_dim_z - 1) / 2.0) * img_voxel_height + img_center_y
+                elif recon_view_mode == 3: #sagittal view (from left to right)
+                    z = - img_pix_size * (i_y - (img_dim - 1) / 2.0) + img_center_z
+                    y_after_rot = - img_pix_size * (i_x - (img_dim - 1) / 2.0) + img_center_y
+                    x_after_rot = (i_z - (img_dim_z - 1) / 2.0) * img_voxel_height + img_center_x
+                    
                 x = + x_after_rot * ti.cos(img_rot) + y_after_rot * ti.sin(img_rot)
                 y = - x_after_rot * ti.sin(img_rot) + y_after_rot * ti.cos(img_rot)
                 for j in ti.ndrange(view_num):
