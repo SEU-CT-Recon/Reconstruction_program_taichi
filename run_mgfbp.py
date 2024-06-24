@@ -231,42 +231,6 @@ class Mgfbp:
             self.short_scan = 1
             print('--Short scan, scan Angle = %.1f degrees' % (self.total_scan_angle / PI * 180))
             
-        ######### projection matrix recon parameters ########
-        self.array_pmatrix_taichi = ti.field(dtype=ti.f32, shape=self.view_num * 12)
-        if 'PMatrixFile' in config_dict:
-            temp_dict = ReadConfigFile(config_dict['PMatrixFile'])
-            if 'Value' in temp_dict:
-                self.array_pmatrix = np.array(temp_dict['Value'],dtype = np.float32)
-                if len(self.array_pmatrix) != self.view_num * 12:
-                    print(f'ERROR: view number is {self.view_num:d} while pmatrix has {len(self.array_pmatrix):d} elements!')
-                    sys.exit()
-                self.array_pmatrix_taichi.from_numpy(self.array_pmatrix)
-                self.bool_apply_pmatrix = 1
-                print("--Pmatrix applied")
-            else:
-                print("ERROR: PMatrixFile has no member named 'Value'!")
-                sys.exit()
-        else:
-            self.bool_apply_pmatrix = 0
-            
-        ## Change the projection matrix values if vertical recon range is applied
-        ## The original pmatrix need to be modified
-        if self.bool_apply_pmatrix:
-            for view_idx in range(self.view_num):
-                pmatrix_this_view = self.array_pmatrix[(view_idx*12):(view_idx+1)*12]#get the pmatrix for this view
-                pmatrix_this_view = np.reshape(pmatrix_this_view,[3,4])#reshape it to be 3x4 matrix
-                matrix_A = np.linalg.inv(pmatrix_this_view[:,0:3])#matrix A is the inverse of the 3x3 matrix from the first three columns
-                x_s = - np.matmul(matrix_A,pmatrix_this_view[:,3]).reshape([3,1])#calculate the source position
-                e_v = matrix_A[:,1]#calculate the unit vector along detector vertical direction
-                matrix_A[:,2] = matrix_A[:,2] + np.multiply(self.dect_elem_vertical_recon_range_begin, e_v)
-                #calculate the new x_do - x_s
-                
-                matrix_A_inverse = np.linalg.inv(matrix_A) #reculate the inverse of matrix A
-                pmatrix_this_view = np.append(matrix_A_inverse, -np.matmul(matrix_A_inverse,x_s), axis = 1)#get the new pmatrix for this view
-                pmatrix_this_view = np.reshape(pmatrix_this_view,[12,1])#reshape the matrix to be a vector
-                self.array_pmatrix[(view_idx*12):(view_idx+1)*12] = pmatrix_this_view[:,0] #update the pmatrix array
-            self.array_pmatrix_taichi.from_numpy(self.array_pmatrix)#update the taichi array
-            
         ######## NEW! Beam Hardening Correction Coefficients ########
         if 'BeamHardeningCorrectionCoefficients' in config_dict:
             print("--BH correction applied")
@@ -390,6 +354,74 @@ class Mgfbp:
             self.img_dim_z = self.dect_elem_count_vertical
             self.img_voxel_height = 0.0
             self.img_center_z = 0
+        
+            
+        ######### projection matrix recon parameters ########
+        self.array_pmatrix_taichi = ti.field(dtype=ti.f32, shape=self.view_num * 12)
+        if 'PMatrixFile' in config_dict:
+            temp_dict = ReadConfigFile(config_dict['PMatrixFile'])
+            if 'Value' in temp_dict:
+                self.array_pmatrix = np.array(temp_dict['Value'],dtype = np.float32)
+                if len(self.array_pmatrix) != self.view_num * 12:
+                    print(f'ERROR: view number is {self.view_num:d} while pmatrix has {len(self.array_pmatrix):d} elements!')
+                    sys.exit()
+                self.array_pmatrix_taichi.from_numpy(self.array_pmatrix)
+                self.bool_apply_pmatrix = 1
+                print("--Pmatrix applied")
+            else:
+                print("ERROR: PMatrixFile has no member named 'Value'!")
+                sys.exit()
+        else:
+            self.bool_apply_pmatrix = 0
+        
+        ## Change the projection matrix Values if a different detector binning is applied for obj CT scan
+        ## compared with the binning mode for pmatrix
+        if 'PMatrixDetectorElementWidth' in config_dict:
+            print('--Pmatrix detector pixel width is different from the CT scan')
+            self.pmatrix_elem_width = config_dict['PMatrixDetectorElementWidth'];
+        else:
+            self.pmatrix_elem_width = self.dect_elem_width;
+        
+        if 'PMatrixDetectorElementHeight' in config_dict:
+            print('--PMatrix detector pixel height is different from the CT scan')
+            self.pmatrix_elem_height = config_dict['PMatrixDetectorElementHeight'];
+        else:
+            self.pmatrix_elem_height = self.dect_elem_height;
+            
+        if self.bool_apply_pmatrix:
+            for view_idx in range(self.view_num):
+                pmatrix_this_view = self.array_pmatrix[(view_idx*12):(view_idx+1)*12]#get the pmatrix for this view
+                pmatrix_this_view = np.reshape(pmatrix_this_view,[3,4])#reshape it to be 3x4 matrix
+                matrix_A = np.linalg.inv(pmatrix_this_view[:,0:3])#matrix A is the inverse of the 3x3 matrix from the first three columns
+                x_s = - np.matmul(matrix_A,pmatrix_this_view[:,3]).reshape([3,1])#calculate the source position
+                e_v_0 = matrix_A[:,1] #calculate the unit vector along detector vertical direction
+                e_u_0 = matrix_A[:,0] #calculate the unit vector along detector horizontal direction
+                e_v = e_v_0 * self.dect_elem_height / self.pmatrix_elem_height #change the unit vector along detector vertical direction
+                e_u = e_u_0 * self.dect_elem_width / self.pmatrix_elem_width #change the unit vector along detector horizontal direction
+                x_do_x_s = matrix_A[:,2] + np.multiply(0.5, e_v - e_v_0) + np.multiply(0.5, e_u - e_v_0)#change x_do - x_s
+                matrix_A[:,0] = e_u; matrix_A[:,1] = e_v; matrix_A[:,2] = x_do_x_s; #update the matrix A
+                matrix_A_inverse = np.linalg.inv(matrix_A) #recalculate the inverse of matrix A
+                pmatrix_this_view = np.append(matrix_A_inverse, -np.matmul(matrix_A_inverse,x_s), axis = 1)#get the new pmatrix for this view
+                pmatrix_this_view = np.reshape(pmatrix_this_view,[12,1])#reshape the matrix to be a vector
+                self.array_pmatrix[(view_idx*12):(view_idx+1)*12] = pmatrix_this_view[:,0] #update the pmatrix array
+            
+        ## Change the projection matrix values if vertical recon range is applied
+        ## The original pmatrix need to be modified
+        if self.bool_apply_pmatrix:
+            for view_idx in range(self.view_num):
+                pmatrix_this_view = self.array_pmatrix[(view_idx*12):(view_idx+1)*12]#get the pmatrix for this view
+                pmatrix_this_view = np.reshape(pmatrix_this_view,[3,4])#reshape it to be 3x4 matrix
+                matrix_A = np.linalg.inv(pmatrix_this_view[:,0:3])#matrix A is the inverse of the 3x3 matrix from the first three columns
+                x_s = - np.matmul(matrix_A,pmatrix_this_view[:,3]).reshape([3,1])#calculate the source position
+                e_v = matrix_A[:,1]#calculate the unit vector along detector vertical direction
+                matrix_A[:,2] = matrix_A[:,2] + np.multiply(self.dect_elem_vertical_recon_range_begin, e_v)
+                #calculate the new x_do - x_s
+                
+                matrix_A_inverse = np.linalg.inv(matrix_A) #recalculate the inverse of matrix A
+                pmatrix_this_view = np.append(matrix_A_inverse, -np.matmul(matrix_A_inverse,x_s), axis = 1)#get the new pmatrix for this view
+                pmatrix_this_view = np.reshape(pmatrix_this_view,[12,1])#reshape the matrix to be a vector
+                self.array_pmatrix[(view_idx*12):(view_idx+1)*12] = pmatrix_this_view[:,0] #update the pmatrix array
+            self.array_pmatrix_taichi.from_numpy(self.array_pmatrix)#update the taichi array
             
         self.img_recon = np.zeros((self.img_dim_z,self.img_dim,self.img_dim),dtype = np.float32)
         self.img_sgm = np.zeros((self.dect_elem_count_vertical_actual, self.view_num, self.dect_elem_count_horizontal),dtype = np.float32)

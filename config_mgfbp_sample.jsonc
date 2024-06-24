@@ -107,5 +107,7 @@
    
   "BeamHardeningCorrectionCoefficients":[1,0.03,0.02], 
 
-  "ReconViewMode":"Coronal" // axial coronal or sagittal
+  "ReconViewMode":"Coronal" , // axial coronal or sagittal
+  "PMatrixDetectorElementHeight" : 0.2, 
+  "PMatrixDetectorElementWidth" : 0.2
 }
