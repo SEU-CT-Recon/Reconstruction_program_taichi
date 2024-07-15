@@ -24,7 +24,7 @@ PI = 3.1415926536
 def run_mgfpj(file_path):
     ti.reset()
     ti.init(arch=ti.gpu)
-    print('Performing FPJ from MandoCT-Taichi (ver 0.1) ...')
+    print('Performing FPJ from MandoCT-Taichi (ver 0.11) ...')
     # record start time point
     start_time = time.time()
     # Delete unnecessary warinings
@@ -318,7 +318,7 @@ class Mgfpj:
         self.array_u_taichi = ti.field(
             dtype=ti.f32, shape=self.dect_elem_count_horizontal*self.oversample_size)
         self.array_v_taichi = ti.field(
-            dtype=ti.f32, shape=self.dect_elem_count_horizontal)
+            dtype=ti.f32, shape=self.dect_elem_count_vertical)
         self.img_image_taichi = ti.field(dtype=ti.f32, shape=(
             self.img_dim_z, self.img_dim, self.img_dim))
         # for sgm in gpu ram, we initialize 2D buffer; since gpu ram is limited
@@ -427,12 +427,9 @@ class Mgfpj:
             source_dect_elem_dis = ((dect_elem_pos_x - source_pos_x)**2 + (
                 dect_elem_pos_y - source_pos_y)**2 + (dect_elem_pos_z - source_pos_z)**2) ** 0.5
 
-            unit_vec_lambda_x = (
-                dect_elem_pos_x - source_pos_x) / source_dect_elem_dis
-            unit_vec_lambda_y = (
-                dect_elem_pos_y - source_pos_y) / source_dect_elem_dis
-            unit_vec_lambda_z = (
-                dect_elem_pos_z - source_pos_z) / source_dect_elem_dis
+            unit_vec_lambda_x = (dect_elem_pos_x - source_pos_x) / source_dect_elem_dis
+            unit_vec_lambda_y = (dect_elem_pos_y - source_pos_y) / source_dect_elem_dis
+            unit_vec_lambda_z = (dect_elem_pos_z - source_pos_z) / source_dect_elem_dis
 
             temp_sgm_val = 0.0
 
@@ -477,6 +474,8 @@ class Mgfpj:
                                 img_image_taichi[z_idx + 1, y_idx+1, x_idx + 1]
                             temp_sgm_val += ((1.0 - z_weight) * sgm_val_lowerslice + z_weight *
                                              sgm_val_upperslice) * fpj_step_size * voxel_diagonal_size
+                        else:
+                            temp_sgm_val = 0.0
                     else:
                         z_idx = v_idx
                         sgm_val = (1 - x_weight) * (1 - y_weight) * img_image_taichi[z_idx, y_idx, x_idx]\

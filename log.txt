@@ -1,0 +1,6 @@
+24-07-15
+fix a bug in mgfpj:
+ self.array_v_taichi = ti.field(
+            dtype=ti.f32, shape=self.dect_elem_count_horizontal) ->
+ self.array_v_taichi = ti.field(
+            dtype=ti.f32, shape=self.dect_elem_count_vertical)
