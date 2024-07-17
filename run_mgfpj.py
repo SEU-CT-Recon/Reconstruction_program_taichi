@@ -475,7 +475,7 @@ class Mgfpj:
                             temp_sgm_val += ((1.0 - z_weight) * sgm_val_lowerslice + z_weight *
                                              sgm_val_upperslice) * fpj_step_size * voxel_diagonal_size
                         else:
-                            temp_sgm_val = 0.0
+                            temp_sgm_val += 0.0
                     else:
                         z_idx = v_idx
                         sgm_val = (1 - x_weight) * (1 - y_weight) * img_image_taichi[z_idx, y_idx, x_idx]\

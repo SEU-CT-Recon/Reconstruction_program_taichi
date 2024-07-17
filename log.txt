@@ -4,3 +4,7 @@ fix a bug in mgfpj:
             dtype=ti.f32, shape=self.dect_elem_count_horizontal) ->
  self.array_v_taichi = ti.field(
             dtype=ti.f32, shape=self.dect_elem_count_vertical)
+
+24-07-17
+else:
+                            temp_sgm_val += 0.0
