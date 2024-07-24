@@ -8,3 +8,10 @@ fix a bug in mgfpj:
 24-07-17
 else:
                             temp_sgm_val += 0.0
+
+24-07-24
+run_mgfbp.py:
+Changed definition of array_angle_taichi.
+Now img rotation is included in array_angle_taichi.
+To be consistent with the run_mgfpj.py.
+The back projection function is modified accordingly. 

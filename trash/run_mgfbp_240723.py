@@ -697,15 +697,13 @@ class Mgfbp:
                     pix_proj_to_dect_v_idx = 0.0
                     ratio_u = 0.0
                     ratio_v = 0.0
-                    angle_this_view_exclude_img_rot = array_angle_taichi[j] - img_rot
-                    
-                    pix_to_source_parallel_dis = source_isocenter_dis - x * ti.cos(angle_this_view_exclude_img_rot) - y * ti.sin(angle_this_view_exclude_img_rot)
+                    pix_to_source_parallel_dis = source_isocenter_dis - x * ti.cos(array_angle_taichi[j]) - y * ti.sin(array_angle_taichi[j])
                     if self.bool_apply_pmatrix == 0:
                         mag_factor = source_dect_dis / pix_to_source_parallel_dis
                         if curved_dect:
-                            pix_proj_to_dect_u = source_dect_dis * ti.atan2(x*ti.sin(angle_this_view_exclude_img_rot)-y*ti.cos(angle_this_view_exclude_img_rot),pix_to_source_parallel_dis)
+                            pix_proj_to_dect_u = source_dect_dis * ti.atan2(x*ti.sin(array_angle_taichi[j])-y*ti.cos(array_angle_taichi[j]),pix_to_source_parallel_dis)
                         else:
-                            pix_proj_to_dect_u = mag_factor * (x*ti.sin(angle_this_view_exclude_img_rot)-y*ti.cos(angle_this_view_exclude_img_rot))
+                            pix_proj_to_dect_u = mag_factor * (x*ti.sin(array_angle_taichi[j])-y*ti.cos(array_angle_taichi[j]))
                         pix_proj_to_dect_u_idx = (pix_proj_to_dect_u - array_u_taichi[0]) / dect_elem_width
                     else:
                         mag_factor = 1.0 / (array_pmatrix_taichi[12*j + 8] * x +\
@@ -725,8 +723,8 @@ class Mgfbp:
                     
                     distance_weight = 0.0
                     if curved_dect:
-                        distance_weight = 1.0 / ((pix_to_source_parallel_dis * pix_to_source_parallel_dis) + (x * ti.sin(angle_this_view_exclude_img_rot) - y * ti.cos(angle_this_view_exclude_img_rot)) \
-                                                * (x * ti.sin(angle_this_view_exclude_img_rot) - y * ti.cos(angle_this_view_exclude_img_rot)))
+                        distance_weight = 1.0 / ((pix_to_source_parallel_dis * pix_to_source_parallel_dis) + (x * ti.sin(array_angle_taichi[j]) - y * ti.cos(array_angle_taichi[j])) \
+                                                * (x * ti.sin(array_angle_taichi[j]) - y * ti.cos(array_angle_taichi[j])))
                     else:
                         distance_weight = 1.0 / (pix_to_source_parallel_dis * pix_to_source_parallel_dis)
 
@@ -811,7 +809,7 @@ class Mgfbp:
             self.GenerateDectPixPosArray(self.dect_elem_count_vertical,self.dect_elem_count_vertical_actual,\
                                          0,0,self.array_v_taichi,0,False)
         #计算angle数组    
-        self.GenerateAngleArray(self.view_num,self.img_rot,self.total_scan_angle,self.array_angle_taichi) #img_rot is not added to array_angle_taichi 
+        self.GenerateAngleArray(self.view_num,0,self.total_scan_angle,self.array_angle_taichi) #img_rot is not added to array_angle_taichi 
         #this is for pmatrix calculation
         
         #img_rot is not incorporated here;

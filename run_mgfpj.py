@@ -79,7 +79,7 @@ class Mgfpj:
                                                        self.dect_elem_count_horizontal*self.oversample_size,
                                                        self.dect_elem_count_vertical, self.view_num, self.img_pix_size, self.img_voxel_height,
                                                        self.source_isocenter_dis, self.source_dect_dis, self.cone_beam,
-                                                       self.helican_scan, self.helical_pitch, v_idx, self.fpj_step_size,
+                                                       self.helical_scan, self.helical_pitch, v_idx, self.fpj_step_size,
                                                        self.img_center_x, self.img_center_y, self.img_center_z, self.curved_dect)
 
                         self.BinSinogram(self.img_sgm_large_taichi, self.img_sgm_taichi,
@@ -127,7 +127,7 @@ class Mgfpj:
             self.img_dim_z = config_dict['ImageDimensionZ']
         else:
             print(
-                "ERROR: Can not find image dimension along Z direction for cone beam recon!")
+                "ERROR: Can not find image dimension along Z direction!")
             sys.exit()
         
         # image center along x and y direction
@@ -290,13 +290,13 @@ class Mgfpj:
 
         ######### Helical Scan parameters ########
         if 'HelicalPitch' in config_dict:
-            self.helican_scan = True
+            self.helical_scan = True
             self.helical_pitch = config_dict['HelicalPitch']
         else:
-            self.helican_scan = False
+            self.helical_scan = False
             self.helical_pitch = 0
 
-        if (self.helican_scan) and ('ImageCenterZ' not in config_dict):
+        if (self.helical_scan) and ('ImageCenterZ' not in config_dict):
             self.img_center_z = self.img_voxel_height * \
                 (self.img_dim_z - 1) / 2.0 * np.sign(self.helical_pitch)
             print("Did not find image center along Z direction in the config file!")
@@ -347,7 +347,7 @@ class Mgfpj:
                                   dect_elem_count_horizontal_oversamplesize: ti.i32,
                                   dect_elem_count_vertical: ti.i32, view_num: ti.i32,
                                   img_pix_size: ti.f32, img_voxel_height: ti.f32, source_isocenter_dis: ti.f32,
-                                  source_dect_dis: ti.f32, cone_beam: ti.i32, helican_scan: ti.i32, helical_pitch: ti.f32,
+                                  source_dect_dis: ti.f32, cone_beam: ti.i32, helical_scan: ti.i32, helical_pitch: ti.f32,
                                   v_idx: ti.i32, fpj_step_size: ti.f32, img_center_x: ti.f32,
                                   img_center_y: ti.f32, img_center_z: ti.f32, curved_dect: ti.i32):
 
@@ -396,7 +396,7 @@ class Mgfpj:
         sgm_val_lowerslice = sgm_val_upperslice = 0.0
 
         z_dis_per_view = 0.0
-        if self.helican_scan:
+        if self.helical_scan:
             total_scan_angle = abs(
                 (array_angle_taichi[view_num - 1] - array_angle_taichi[0])) / (view_num - 1) * view_num
             num_laps = total_scan_angle / (PI * 2)
