@@ -224,7 +224,7 @@ class Mgfbp:
         else:
             self.total_scan_angle = 2*PI #by default, scan angle is 2*pi
        
-        if abs(self.total_scan_angle % PI) < (0.01 / 180 * PI):
+        if abs(self.total_scan_angle % (2 * PI)) < (0.01 / 180 * PI): 
             self.short_scan = 0
             print('--Full scan, scan Angle = %.1f degrees' % (self.total_scan_angle / PI * 180))
         else:

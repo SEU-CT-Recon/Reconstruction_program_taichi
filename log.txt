@@ -15,3 +15,14 @@ Changed definition of array_angle_taichi.
 Now img rotation is included in array_angle_taichi.
 To be consistent with the run_mgfpj.py.
 The back projection function is modified accordingly. 
+
+
+24-08-15
+line 227 fix a bug related to short_scan judgement:
+if abs(self.total_scan_angle % (2 * PI)) < (0.01 / 180 * PI): 
+            self.short_scan = 0
+            print('--Full scan, scan Angle = %.1f degrees' % (self.total_scan_angle / PI * 180))
+        else:
+            self.short_scan = 1
+            print('--Short scan, scan Angle = %.1f degrees' % (self.total_scan_angle / PI * 180))
+previous is self.total_scan_angle %  PI
