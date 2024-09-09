@@ -26,3 +26,6 @@ if abs(self.total_scan_angle % (2 * PI)) < (0.01 / 180 * PI):
             self.short_scan = 1
             print('--Short scan, scan Angle = %.1f degrees' % (self.total_scan_angle / PI * 180))
 previous is self.total_scan_angle %  PI
+
+24-09-09
+add self check of the initilization of the parameters in mgfbp (not finished)

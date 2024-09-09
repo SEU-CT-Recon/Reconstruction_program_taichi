@@ -86,11 +86,52 @@ class Mgfbp:
     def __init__(self,config_dict):
         self.config_dict = config_dict
         ######## parameters related to input and output filenames ########
-        self.input_dir = config_dict['InputDir']
-        self.output_dir = config_dict['OutputDir']
-        self.input_files_pattern = config_dict['InputFiles']
-        self.output_file_prefix = config_dict['OutputFilePrefix']
-        self.output_file_replace = config_dict['OutputFileReplace']
+        if 'InputDir' in config_dict:
+            if type(config_dict['InputDir']) == str:
+                self.input_dir = config_dict['InputDir']
+            else:
+                print("ERROR: InputDir is not a string!")
+                sys.exit()
+        else:
+            print("ERROR: Can not find InputDir in the config file!")
+            sys.exit()
+        
+        if 'OutputDir' in config_dict:
+            if type(config_dict['OutputDir']) == str:
+                self.output_dir = config_dict['OutputDir']
+            else:
+                print("ERROR: OutputDir is not a string!")
+                sys.exit()
+        else:
+            print("ERROR: Can not find OutputDir in the config file!")
+            sys.exit()
+            
+        if 'InputFiles' in config_dict:
+            if type(config_dict['InputFiles']) == str:
+                self.input_files_pattern = config_dict['InputFiles']
+            else:
+                print("ERROR: InputFiles is not a string!")
+                sys.exit()
+        else:
+            print("ERROR: Can not find InputFiles in the config file!")
+            sys.exit()
+            
+        if 'OutputFilePrefix' in config_dict:
+            if type(config_dict['OutputFilePrefix']) == str:
+                self.output_file_prefix = config_dict['OutputFilePrefix']
+            else:
+                print("ERROR: OutputFilePrefix is not a string!")
+                sys.exit()
+        else:
+            print("ERROR: Can not find OutputFilePrefix in the config file!")
+            sys.exit()
+
+        if 'OutputFileReplace' in config_dict:
+            self.output_file_replace = config_dict['OutputFileReplace']
+        else:
+            print("ERROR: Can not find OutputFileReplace in the config file!")
+            sys.exit()
+       
         
         #NEW define output file format: tif or raw
         if 'OutputFileFormat' in config_dict:
@@ -124,14 +165,24 @@ class Mgfbp:
             # the images are NOT up-side-down
             # first sinogram slice corresponds to top row of the detector
         elif 'FirstSinogramSliceIsDetectorTopRow' in config_dict:
-            self.first_slice_top_row = config_dict['FirstSinogramSliceIsDetectorTopRow']
+            if isinstance(config_dict['FirstSinogramSliceIsDetectorTopRow'], bool):
+                self.first_slice_top_row = config_dict['FirstSinogramSliceIsDetectorTopRow']
+            else:
+                print("ERROR: FirstSinogramSliceIsDetectorTopRow can only be true or false!")
+                sys.exit()
         else:
             self.first_slice_top_row = False # by default, first sgm slice is detector bottom row
+            
         if self.first_slice_top_row:
             print('--First sinogram slice corresponds to top detector row')
         
         if 'SaveFilteredSinogram' in config_dict:
-            self.save_filtered_sinogram = config_dict['SaveFilteredSinogram']
+            if isinstance(config_dict['SaveFilteredSinogram'], bool):
+                self.save_filtered_sinogram = config_dict['SaveFilteredSinogram']
+            else:
+                print("ERROR: SaveFilteredSinogram can only be true or false!")
+                sys.exit()
+                
             if self.save_filtered_sinogram:
                 print("--Filtered sinogram is saved")
         else:
@@ -140,17 +191,28 @@ class Mgfbp:
         ######## parameters related to detector (fan beam case) ########
         #detector type (flat panel or curved)
         if 'CurvedDetector' in config_dict:
-            self.curved_dect = config_dict['CurvedDetector']
+            if isinstance(config_dict['CurvedDetector'], bool):
+                self.curved_dect = config_dict['CurvedDetector']
+            else:
+                print("ERROR: CurvedDetector can only be true or false!")
+                sys.exit()
             if self.curved_dect:
                 print("--Curved detector")
         else:
             self.curved_dect = False 
+            
         if 'DetectorElementCountHorizontal' in config_dict:
             self.dect_elem_count_horizontal = config_dict['DetectorElementCountHorizontal']
         elif 'SinogramWidth' in config_dict:
             self.dect_elem_count_horizontal = config_dict['SinogramWidth']
         else:
             print("ERROR: Can not find detector element count along horizontal direction!")
+            sys.exit()
+        if self.dect_elem_count_horizontal <= 0:
+            print("ERROR: DetectorElementCountHorizontal (SinogramWidth) should be larger than 0!")
+            sys.exit()
+        elif self.dect_elem_count_horizontal % 1 != 0:
+            print("ERROR: DetectorElementCountHorizontal (SinogramWidth) should be an integer!")
             sys.exit()
             
         if 'DetectorElementWidth' in config_dict:
@@ -160,6 +222,9 @@ class Mgfbp:
         else:
             print("ERROR: Can not find detector element width!")
             sys.exit()
+        if self.dect_elem_width <= 0:
+            print("ERROR: DetectorElementWidth (DetectorElementSize) should be larger than 0!")
+            sys.exit()
         
         if 'DetectorOffcenter' in config_dict:
             self.dect_offset_horizontal = config_dict['DetectorOffcenter']
@@ -167,6 +232,9 @@ class Mgfbp:
             self.dect_offset_horizontal = config_dict['DetectorOffsetHorizontal']
         else:
             print("Warning: Can not find horizontal detector offset; Using default value 0")
+        if not isinstance(self.dect_offset_horizontal, float) and not isinstance(self.dect_offset_horizontal, int):
+            print("ERROR: DetectorOffsetHorizontal (DetectorOffcenter) should be a number!")
+            sys.exit()
             
         if 'DetectorElementCountVertical' in config_dict:
             self.dect_elem_count_vertical = config_dict['DetectorElementCountVertical']
@@ -175,15 +243,28 @@ class Mgfbp:
         else:
             print("ERROR: Can not find detector element count along vertical direction!")
             sys.exit()
+        if self.dect_elem_count_vertical <= 0:
+            print("ERROR: DetectorElementCountVertical (SliceCount) should be larger than 0!")
+            sys.exit()
+        elif self.dect_elem_count_vertical % 1 != 0:
+            print("ERROR: DetectorElementCountVertical (SliceCount) should be an integer!")
+            sys.exit()
         
         #NEW! using partial slices of sinogram for reconstruction  
         if 'DetectorElementVerticalReconRange' in config_dict:
             temp_array = config_dict['DetectorElementVerticalReconRange']
+            if not isinstance(temp_array, list) or len(temp_array)!=2:
+                print("ERROR: DetectorElementVerticalReconRange should be an array with two numbers!")
+                sys.exit()
             self.dect_elem_vertical_recon_range_begin = temp_array[0]
             self.dect_elem_vertical_recon_range_end = temp_array[1]
             if self.dect_elem_vertical_recon_range_end > self.dect_elem_count_vertical-1 or \
                 self.dect_elem_vertical_recon_range_begin <0:
                 print('ERROR: Out of detector row range!')
+                sys.exit()
+            if self.dect_elem_vertical_recon_range_begin%1!=0 or\
+                self.dect_elem_vertical_recon_range_end%1!=0:
+                print('ERROR: DetectorElementVerticalReconRange must be integers!')
                 sys.exit()
             print(f"--Reconstructing from detector row #{temp_array[0]:d} to #{temp_array[1]:d}")
             self.dect_elem_count_vertical_actual = temp_array[1] - temp_array[0] + 1 
@@ -196,6 +277,9 @@ class Mgfbp:
         #NEW! apply gauss smooth along z direction
         if 'DetectorElementVerticalGaussFilterSize' in config_dict:
             self.dect_elem_vertical_gauss_filter_size = config_dict['DetectorElementVerticalGaussFilterSize']
+            if self.dect_elem_vertical_gauss_filter_size < 0:
+                print('ERROR: DetectorElementVerticalGaussFilterSize should be larger than 0!')
+                sys.exit()
             self.apply_gauss_vertical = True
             print("--Apply Gaussian filter along the vertical direction of the detector")
         else:
@@ -211,11 +295,17 @@ class Mgfbp:
         else:
             print("ERROR: Can not find number of views!")
             sys.exit()
+        if self.view_num%1!=0 or self.view_num<0:
+            print("ERROR: Views must be larger than 0 and must be an integer!")
+            sys.exit()
             
         if 'SinogramHeight' in config_dict:
             self.sgm_height = config_dict['SinogramHeight']
         else:
             self.sgm_height = self.view_num
+        if self.sgm_height%1!=0 or self.sgm_height<0:
+            print("ERROR: SinogramHeight must be larger than 0 and must be an integer!")
+            sys.exit()
         
         if 'TotalScanAngle' in config_dict:
             self.total_scan_angle = config_dict['TotalScanAngle'] / 180.0 * PI
@@ -223,6 +313,9 @@ class Mgfbp:
             # all angular variables are in rad unit
         else:
             self.total_scan_angle = 2*PI #by default, scan angle is 2*pi
+        if not isinstance(self.total_scan_angle, float) and not isinstance(self.total_scan_angle, int):
+            print("ERROR: TotalScanAngle should be a number!")
+            sys.exit()
        
         if abs(self.total_scan_angle % (2 * PI)) < (0.01 / 180 * PI): 
             self.short_scan = 0
@@ -236,19 +329,63 @@ class Mgfbp:
             print("--BH correction applied")
             self.bool_bh_correction = True
             self.array_bh_coefficients = np.array(config_dict['BeamHardeningCorrectionCoefficients'],dtype = np.float32)
+            if not isinstance(self.array_bh_coefficients, list):
+                print('ERROR: BeamHardeningCorrectionCoefficients must be an array')
+                sys.exit()
             self.bh_corr_order = len(self.array_bh_coefficients)
             self.array_bh_coefficients_taichi = ti.field(dtype=ti.f32, shape = self.bh_corr_order)
             self.array_bh_coefficients_taichi.from_numpy(self.array_bh_coefficients)
         else:
             self.bool_bh_correction = False
                 
-        ######## CT scan geometries ########        
-        self.source_isocenter_dis = config_dict['SourceIsocenterDistance']
-        self.source_dect_dis = config_dict['SourceDetectorDistance']
+        ######## CT scan geometries ########
+        if 'SourceIsocenterDistance' in config_dict:
+            self.source_isocenter_dis = config_dict['SourceIsocenterDistance']
+            if not isinstance(self.source_isocenter_dis, float) and not isinstance(self.source_isocenter_dis, int):
+                print('ERROR: SourceIsocenterDistance must be a number!')
+                sys.exit()
+            if self.source_isocenter_dis<=0.0:
+                print('ERROR: SourceIsocenterDistance must be positive!')
+                sys.exit()
+        else:
+            self.source_isocenter_dis = self.dect_elem_count_horizontal * self.dect_elem_width * 1000.0
+            print('Warning: Did not find SourceIsocenterDistance; Set to infinity!')
+          
+        if 'SourceDetectorDistance' in config_dict:
+            self.source_dect_dis = config_dict['SourceDetectorDistance']
+            if not isinstance(self.source_dect_dis, float) and not isinstance(self.source_dect_dis, int):
+                print('ERROR: SourceDetectorDistance must be a number!')
+                sys.exit()
+            if self.source_dect_dis<=0.0:
+                print('ERROR: SourceDetectorDistance must be positive!')
+                sys.exit()
+        else:
+            self.source_dect_dis = self.dect_elem_count_horizontal * self.dect_elem_width * 1000.0
+            print('Warning: Did not find SourceDetectorDistance; Set to infinity!')
+        
         
         ######## Reconstruction image size (in-plane) ########
-        self.img_dim = config_dict['ImageDimension']
-        self.img_pix_size = config_dict['PixelSize']
+        if 'ImageDimension' in config_dict:
+            self.img_dim = config_dict['ImageDimension']
+            if self.img_dim<0 or not isinstance(self.img_dim, int):
+                print('ERROR: ImageDimension must be a positive integer!')
+                sys.exit()
+        else:
+            print('ERROR: can not find ImageDimension!')
+            sys.exit()
+        
+        if 'PixelSize' in config_dict:
+            self.img_pix_size = config_dict['PixelSize']
+            if not isinstance(self.img_pix_size, float) and not isinstance(self.img_pix_size, int):
+                print('ERROR: PixelSize must be a number!')
+                sys.exit()
+            if self.img_pix_size<0:
+                print('ERROR: PixelSize must be positive!')
+                sys.exit()
+        else:
+            print('ERROR: can not find PixelSize!')
+            sys.exit()
+            
         if 'ImageRotation' in config_dict:
             self.img_rot = config_dict['ImageRotation'] / 180.0 * PI
         else:
