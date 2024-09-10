@@ -29,3 +29,6 @@ previous is self.total_scan_angle %  PI
 
 24-09-09
 add self check of the initilization of the parameters in mgfbp (not finished)
+
+24-09-10
+add self check of the initilization of the parameters in mgfbp (finished)

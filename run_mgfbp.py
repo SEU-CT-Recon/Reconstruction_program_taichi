@@ -379,7 +379,7 @@ class Mgfbp:
             if not isinstance(self.img_pix_size, float) and not isinstance(self.img_pix_size, int):
                 print('ERROR: PixelSize must be a number!')
                 sys.exit()
-            if self.img_pix_size<0:
+            if self.img_pix_size < 0:
                 print('ERROR: PixelSize must be positive!')
                 sys.exit()
         else:
@@ -388,6 +388,9 @@ class Mgfbp:
             
         if 'ImageRotation' in config_dict:
             self.img_rot = config_dict['ImageRotation'] / 180.0 * PI
+            if not isinstance(self.img_rot, float) and not isinstance(self.img_rot, int):
+                print('ERROR: ImageRotation must be a number!')
+                sys.exit()
         else:
             self.img_rot = 0.0
         # ImageRotation is originally in degree; change it to rad
@@ -396,6 +399,9 @@ class Mgfbp:
         
         if 'ImageCenter' in config_dict:
             self.img_center = config_dict['ImageCenter']
+            if not isinstance(self.img_center,list) or len(self.img_center)!=2:
+                print('ERROR: ImageCenter must be an array with two numbers!')
+                sys.exit()
             self.img_center_x = self.img_center[0]
             self.img_center_y = self.img_center[1]
         else:
@@ -429,10 +435,16 @@ class Mgfbp:
             self.array_kernel_ramp_taichi = ti.field(dtype=ti.f32, shape=2*self.dect_elem_count_horizontal-1)
             self.array_kernel_gauss_taichi = ti.field(dtype=ti.f32, shape=2*self.dect_elem_count_horizontal-1)
             #当进行高斯核运算的时候需要两个额外的数组存储相关数据
+        if not isinstance(self.kernel_param,float) and not isinstance(self.kernel_param,int):
+            print("ERROR: Kernel parameter must be a number!")
+            sys.exit()
         
         ######## whether images are converted to HU ########
         if 'WaterMu' in config_dict: 
             self.water_mu = config_dict['WaterMu']
+            if not isinstance(self.water_mu,float) and not isinstance(self.water_mu,int):
+                print("ERROR: WaterMu must be a number!")
+                sys.exit()
             self.convert_to_HU = True
             print("--Converted to HU")
         else:
@@ -441,6 +453,9 @@ class Mgfbp:
         ######## cone beam reconstruction parameters ########
         if 'ConeBeam' in config_dict:
             self.cone_beam = config_dict['ConeBeam']
+            if not isinstance(self.cone_beam,bool):
+                print('ERROR: ConeBeam must be true or false!')
+                sys.exit()
         else:
             self.cone_beam = False
         
@@ -455,6 +470,12 @@ class Mgfbp:
             else:
                 print("ERROR: Can not find detector element height for cone beam recon! ")
                 sys.exit()
+            if not isinstance(self.dect_elem_height,float) and not isinstance(self.dect_elem_height,int):
+                print('ERROR: DetectorElementHeight (SliceThickness) must be a number!')
+                sys.exit()
+            if self.dect_elem_height <= 0:
+                print('ERROR: DetectorElementHeight (SliceThickness) must be positive!')
+                sys.exit()
                 
             #detector offset vertical
             if 'SliceOffCenter' in config_dict:
@@ -464,6 +485,9 @@ class Mgfbp:
             else: 
                 self.dect_offset_vertical = 0
                 print("Warning: Can not find vertical detector offset for cone beam recon; Using default value 0")
+            if not isinstance(self.dect_offset_vertical,float) and not isinstance(self.dect_offset_vertical,int):
+                print('ERROR: DetectorOffsetVertical (SliceOffCenter) must be a number!')
+                sys.exit()
             
             #image dimension along z direction
             if 'ImageSliceCount' in config_dict:
@@ -473,6 +497,9 @@ class Mgfbp:
             else:
                 print("ERROR: Can not find image dimension along Z direction for cone beam recon!")
                 sys.exit() 
+            if not isinstance(self.img_dim_z,int) or not self.img_dim_z <= 0:
+                print('ERROR: ImageDimensionZ (ImageSliceCount) must be a positive integer!')
+                sys.exit()
                 
             #image voxel height
             if 'VoxelHeight' in config_dict:
@@ -482,10 +509,19 @@ class Mgfbp:
             else:
                 print("ERROR: Can not find image voxel height for cone beam recon!")
                 sys.exit()
+            if not isinstance(self.img_voxel_height,float) and not isinstance(self.img_voxel_height,int):
+                print('ERROR: VoxelHeight (ImageSliceThickness) must be a number!')
+                sys.exit()
+            if self.img_voxel_height <= 0:
+                print('ERROR: VoxelHeight (ImageSliceThickness) must be positive!')
+                sys.exit()
                 
             #img center along z direction
             if 'ImageCenterZ' in config_dict:
                 self.img_center_z = config_dict['ImageCenterZ']
+                if not isinstance(self.img_center_z,float) and not isinstance(self.img_center_z,int):
+                    print('ERROR: ImageCenterZ must be a number!')
+                    sys.exit()
             else:
                 current_center_row_idx = (self.dect_elem_vertical_recon_range_end +  self.dect_elem_vertical_recon_range_begin)/2
                 distance_to_original_detector_center_row = (current_center_row_idx - (self.dect_elem_count_vertical-1)/2) * self.dect_elem_height
@@ -510,6 +546,9 @@ class Mgfbp:
             temp_dict = ReadConfigFile(config_dict['PMatrixFile'])
             if 'Value' in temp_dict:
                 self.array_pmatrix = np.array(temp_dict['Value'],dtype = np.float32)
+                if not isinstance(self.array_pmatrix):
+                    print('ERROR: PMatrixFile.Value is not an array')
+                    sys.exit()
                 if len(self.array_pmatrix) != self.view_num * 12:
                     print(f'ERROR: view number is {self.view_num:d} while pmatrix has {len(self.array_pmatrix):d} elements!')
                     sys.exit()
@@ -525,17 +564,31 @@ class Mgfbp:
         ## Change the projection matrix Values if a different detector binning is applied for obj CT scan
         ## compared with the binning mode for pmatrix
         if 'PMatrixDetectorElementWidth' in config_dict:
-            print('--Pmatrix detector pixel width is different from the CT scan')
+            print('--PMatrix detector pixel width is different from the CT scan')
             self.pmatrix_elem_width = config_dict['PMatrixDetectorElementWidth'];
+            if not isinstance(self.pmatrix_elem_width,float) and not isinstance(self.pmatrix_elem_width,int):
+                print('ERROR: PMatrixDetectorElementWidth must be a number!')
+                sys.exit()
+            if self.pmatrix_elem_width <= 0:
+                print('ERROR: PMatrixDetectorElementWidth must be positive!')
+                sys.exit()
         else:
             self.pmatrix_elem_width = self.dect_elem_width;
         
         if 'PMatrixDetectorElementHeight' in config_dict:
             print('--PMatrix detector pixel height is different from the CT scan')
             self.pmatrix_elem_height = config_dict['PMatrixDetectorElementHeight'];
+            if not isinstance(self.pmatrix_elem_height,float) and not isinstance(self.pmatrix_elem_height,int):
+                print('ERROR: PMatrixDetectorElementHeight must be a number!')
+                sys.exit()
+            if self.pmatrix_elem_height <= 0:
+                print('ERROR: PMatrixDetectorElementHeight must be positive!')
+                sys.exit()
         else:
             self.pmatrix_elem_height = self.dect_elem_height;
             
+        ## Change the projection matrix values if the detector pixel size for pmatrix is different from the CT scan
+        ## The original pmatrix need to be modified
         if self.bool_apply_pmatrix:
             for view_idx in range(self.view_num):
                 pmatrix_this_view = self.array_pmatrix[(view_idx*12):(view_idx+1)*12]#get the pmatrix for this view
@@ -616,7 +669,7 @@ class Mgfbp:
             else:
                 if curved_dect:
                     temp_val = float(n) * dect_elem_width / source_dect_dis
-                    array_recon_kernel_taichi[i] = -t / (PI * PI * (source_dect_dis **2) * (temp_val - temp_val**3/3/2/1 + temp_val**5/5/4/3/2/1)**2 )
+                    array_recon_kernel_taichi[i] = -t / (PI * PI * (source_dect_dis **2) * (temp_val - temp_val**3/3/2/1 + temp_val**5/5/4/3/2/1)**2)
                     #use taylor expansion to replace the built-in taichi.sin function
                     #this function leads to 1% bias in calculation
                 else:
