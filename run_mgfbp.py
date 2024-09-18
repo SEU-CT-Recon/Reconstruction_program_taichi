@@ -533,6 +533,7 @@ class Mgfbp:
                     * self.source_isocenter_dis / self.source_dect_dis
                 print("Warning: Did not find image center along z direction! Use default setting (central slice of the given detector recon row range)")
                 print("Image center at Z direction is %.4f mm. " %self.img_center_z)
+                config_dict['ImageCenterZ'] = self.img_center_z
         else:
             print("--Fan beam recon")
             self.dect_elem_height = 0.0
@@ -682,6 +683,11 @@ class Mgfbp:
                   %( self.total_scan_angle / PI * 180.0))
             print('Mean Source to Isocenter Distance is %.2f mm;' %(self.source_isocenter_dis))
             print('Mean Source to Detector Distance is %.2f mm.' %(self.source_dect_dis))
+            config_dict['SourceIsocenterDistance'] = self.source_isocenter_dis
+            config_dict['SourceDetectorDistance'] = self.source_dect_dis
+            config_dict['DetectorOffsetHorizontal'] = self.dect_offset_horizontal
+            config_dict['DetectorOffsetVertical'] = self.dect_offset_vertical
+            config_dict['TotalScanAngle'] = self.total_scan_angle / PI * 180.0
             
             
         ## Change the projection matrix values if the detector pixel size for pmatrix is different from the CT scan
@@ -745,6 +751,15 @@ class Mgfbp:
         self.array_u_taichi = ti.field(dtype=ti.f32,shape=self.dect_elem_count_horizontal)
         #存储数组u
         self.array_v_taichi = ti.field(dtype = ti.f32,shape = self.dect_elem_count_vertical_actual)
+        
+        if 'SaveModifiedConfigName' in config_dict:
+            if isinstance(config_dict['SaveModifiedConfigName'], str):
+                save_jsonc(config_dict['SaveModifiedConfigName'], config_dict)
+                print('Modified config file is saved to %s.' %(config_dict['SaveModifiedConfigName']))
+            else:
+                print('ERROR: SaveModifiedConfigName must be a string! ')
+                sys.exit()
+            
         
     
         

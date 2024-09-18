@@ -37,4 +37,7 @@ add self check of the initilization of the parameters in mgfbp (finished)
 Add codes to modify the original pmatrix and output the parameter values from the pmatrix
 If the plane of the source position is not perpendicular to the z-axis
 and the source position of the first view is not located on the +x-axis 
-The original pmatrix need to be modified
+The original pmatrix need to be modified. 
+
+Add option to save the modified config file: 
+"SaveModifiedConfigName": "config_1.jsonc"
