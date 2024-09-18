@@ -7,6 +7,7 @@ import sys
 import os
 import numpy as np
 import gc
+import math
 from crip.io import imwriteRaw
 from crip.io import imwriteTiff
 
@@ -328,11 +329,12 @@ class Mgfbp:
         if 'BeamHardeningCorrectionCoefficients' in config_dict:
             print("--BH correction applied")
             self.bool_bh_correction = True
-            self.array_bh_coefficients = np.array(config_dict['BeamHardeningCorrectionCoefficients'],dtype = np.float32)
+            self.array_bh_coefficients = config_dict['BeamHardeningCorrectionCoefficients']
             if not isinstance(self.array_bh_coefficients, list):
-                print('ERROR: BeamHardeningCorrectionCoefficients must be an array')
+                print('ERROR: BeamHardeningCorrectionCoefficients must be an array!')
                 sys.exit()
             self.bh_corr_order = len(self.array_bh_coefficients)
+            self.array_bh_coefficients = np.array(self.array_bh_coefficients,dtype = np.float32)
             self.array_bh_coefficients_taichi = ti.field(dtype=ti.f32, shape = self.bh_corr_order)
             self.array_bh_coefficients_taichi.from_numpy(self.array_bh_coefficients)
         else:
@@ -497,7 +499,7 @@ class Mgfbp:
             else:
                 print("ERROR: Can not find image dimension along Z direction for cone beam recon!")
                 sys.exit() 
-            if not isinstance(self.img_dim_z,int) or not self.img_dim_z <= 0:
+            if not isinstance(self.img_dim_z,int) or self.img_dim_z <= 0:
                 print('ERROR: ImageDimensionZ (ImageSliceCount) must be a positive integer!')
                 sys.exit()
                 
@@ -545,16 +547,17 @@ class Mgfbp:
         if 'PMatrixFile' in config_dict:
             temp_dict = ReadConfigFile(config_dict['PMatrixFile'])
             if 'Value' in temp_dict:
-                self.array_pmatrix = np.array(temp_dict['Value'],dtype = np.float32)
-                if not isinstance(self.array_pmatrix):
+                self.array_pmatrix = temp_dict['Value']
+                if not isinstance(self.array_pmatrix,list):
                     print('ERROR: PMatrixFile.Value is not an array')
                     sys.exit()
                 if len(self.array_pmatrix) != self.view_num * 12:
                     print(f'ERROR: view number is {self.view_num:d} while pmatrix has {len(self.array_pmatrix):d} elements!')
                     sys.exit()
+                self.array_pmatrix = np.array(self.array_pmatrix,dtype = np.float32)
                 self.array_pmatrix_taichi.from_numpy(self.array_pmatrix)
                 self.bool_apply_pmatrix = 1
-                print("--Pmatrix applied")
+                print("--PMatrix applied")
             else:
                 print("ERROR: PMatrixFile has no member named 'Value'!")
                 sys.exit()
@@ -586,6 +589,100 @@ class Mgfbp:
                 sys.exit()
         else:
             self.pmatrix_elem_height = self.dect_elem_height;
+            
+        ## Change the projection matrix values
+        ## If the plane of the source position is not perpendicular to the z-axis
+        ## and the source position of the first view is not located on the +x-axis 
+        ## The original pmatrix need to be modified
+        x_s_rec = np.zeros(shape = (3,self.view_num))
+        if self.bool_apply_pmatrix:
+            for view_idx in range(self.view_num):
+                pmatrix_this_view = self.array_pmatrix[(view_idx*12):(view_idx+1)*12]#get the pmatrix for this view
+                pmatrix_this_view = np.reshape(pmatrix_this_view,[3,4])#reshape it to be 3x4 matrix
+                matrix_A = np.linalg.inv(pmatrix_this_view[:,0:3])#matrix A is the inverse of the 3x3 matrix from the first three columns
+                x_s_rec[:,view_idx:view_idx+1]=- np.matmul(matrix_A,pmatrix_this_view[:,3]).reshape([3,1])#calculate the source position
+            
+            #after getting the position of the source, we need to calculate the plane of the source trajectory
+            #assume the plane is defined as a*x + b*y + c*z = 1
+            matrix_A = x_s_rec.transpose()
+            vec_y = np.ones(shape = (self.view_num,1))
+            sol = XuLeastSquareSolution(matrix_A, vec_y) #solve a, b and c using least squared method
+            
+            angle_y = np.arctan(sol[0] / sol[2]) #first rotate along y axis
+            angle_x = np.arctan(sol[1] / np.sqrt( sol[0]**2 + sol[2] ** 2 )) * np.sign(sol[2]) #then rotate along x axis
+            rotation_matrix_y = np.array([[math.cos(angle_y),0,-math.sin(angle_y)],[0,1,0],[math.sin(angle_y),0,math.cos(angle_y)]])
+            rotation_matrix_x = np.array([[1,0,0],[0,math.cos(angle_x),-math.sin(angle_x)],[0,math.sin(angle_x),math.cos(angle_x)]])
+            x_s_rec_rot = np.matmul(rotation_matrix_x,np.matmul(rotation_matrix_y,x_s_rec))
+            z_c = np.mean(x_s_rec_rot[2,:]) #center of the circle along the z-direction
+            
+            x_s_xy_plane = x_s_rec_rot[0:2,:] #get the position when the points are projected onto the xy plane
+            #after the projection operation, we need to determine the center for a 2D circle, which is easy
+            #assume the circle is x^2 + y^2 - a*x - b*y + c = 0
+            matrix_A = np.concatenate((-x_s_xy_plane.transpose(),np.ones(shape=(self.view_num,1))),axis = 1)
+            vec_y = -np.sum(x_s_xy_plane**2,axis = 0)
+            sol = XuLeastSquareSolution(matrix_A, vec_y) # solution for a b and c; center is a/2 and b/2
+            x_s_rec_rot_shift_xyz = x_s_rec_rot - np.array([[sol[0]/2],[sol[1]/2],[z_c]]) 
+            # get the position of the source when it is shifted so that the center of the circle is at the origin.
+            # now the source trajectory is in the x-y plane and the circle of the center is located as the origin.
+            # we need to rotate it along the z-axis so that for the first view, the source is located at +x axis. 
+            angle_z = math.atan2(x_s_rec_rot_shift_xyz[1,0],x_s_rec_rot_shift_xyz[0,0])
+            rotation_matrix_z = np.array([[math.cos(angle_z),math.sin(angle_z),0],[-math.sin(angle_z),math.cos(angle_z),0],[0,0,1]])
+            x_s_rec_final = np.matmul(rotation_matrix_z,x_s_rec_rot_shift_xyz)#final source positions
+            rotation_matrix_total = np.matmul(rotation_matrix_z,np.matmul(rotation_matrix_x,rotation_matrix_y)) 
+            #multiply three rotation operations together
+            
+            v_center_rec = np.zeros(shape = (self.view_num,1))#array to record the center along v direction
+            u_center_rec = np.zeros(shape = (self.view_num,1))#array to record the center along u direction
+            total_scan_angle = 0.0
+            x_d_center_x_s_rec_final = np.zeros(shape = (3, self.view_num))#array to record the center along u direction
+            for view_idx in range(self.view_num):
+                pmatrix_this_view = self.array_pmatrix[(view_idx*12):(view_idx+1)*12]#get the pmatrix for this view
+                pmatrix_this_view = np.reshape(pmatrix_this_view,[3,4])#reshape it to be 3x4 matrix
+                matrix_A = np.linalg.inv(pmatrix_this_view[:,0:3])#matrix A is the inverse of the 3x3 matrix from the first three columns
+                e_v_0 = matrix_A[:,1] #calculate the unit vector along detector vertical direction
+                e_u_0 = matrix_A[:,0] #calculate the unit vector along detector horizontal direction
+                pixel_size_ratio = (self.pmatrix_elem_width / np.linalg.norm(e_u_0) + self.pmatrix_elem_height / np.linalg.norm(e_u_0)) * 0.5
+                #confirm the pixel size from pmatrix is the same with the preset pmatrix pixel size;
+                pmatrix_this_view = pmatrix_this_view / pixel_size_ratio #if not, need to normalize the pmatrix
+                
+                matrix_A = np.linalg.inv(pmatrix_this_view[:,0:3]) #matrix A is the inverse of the 3x3 matrix from the first three columns
+                x_s = x_s_rec_final[:,view_idx:view_idx+1] #calculate the source position
+                if view_idx <= self.view_num - 2:
+                    x_s_next_view =  x_s_rec_final[:,view_idx+1:view_idx+2]
+                    delta_angle = math.atan2(x_s_next_view[1], x_s_next_view[0]) - math.atan2(x_s[1], x_s[0])
+                    if abs(delta_angle) > PI:
+                        delta_angle = delta_angle - 2 * PI *np.sign(delta_angle)
+                    total_scan_angle = total_scan_angle + delta_angle
+                e_v_0 = matrix_A[:,1] #calculate the unit vector along detector vertical direction
+                e_u_0 = matrix_A[:,0] #calculate the unit vector along detector horizontal direction
+                e_v = np.matmul(rotation_matrix_total, e_v_0) #change the unit vector along detector vertical direction
+                e_u = np.matmul(rotation_matrix_total, e_u_0) #change the unit vector along detector horizontal direction
+                x_do_x_s = np.matmul(rotation_matrix_total, matrix_A[:,2]) #change x_do - x_s
+                matrix_A[:,0] = e_u; matrix_A[:,1] = e_v; matrix_A[:,2] = x_do_x_s; #update the matrix A
+                matrix_A_inverse = np.linalg.inv(matrix_A) #recalculate the inverse of matrix A
+                pmatrix_this_view = np.append(matrix_A_inverse, -np.matmul(matrix_A_inverse,x_s), axis = 1)#get the new pmatrix for this view
+                u_center_rec[view_idx, 0]= pmatrix_this_view[0,3] / pmatrix_this_view[2,3]#get center of the pixel along u direction
+                v_center_rec[view_idx, 0]= pmatrix_this_view[1,3] / pmatrix_this_view[2,3]#get center of the pixel along v direction
+                x_d_center_x_s_rec_final[:,view_idx:view_idx+1] = x_do_x_s.reshape((3,1)) + \
+                    u_center_rec[view_idx, 0] * e_u.reshape((3,1)) + v_center_rec[view_idx, 0] * e_v.reshape((3,1))
+                
+                pmatrix_this_view = np.reshape(pmatrix_this_view,[12,1])#reshape the matrix to be a vector
+                self.array_pmatrix[(view_idx*12):(view_idx+1)*12] = pmatrix_this_view[:,0] #update the pmatrix array
+            u_center_mean = np.mean(u_center_rec,axis = 0)#get mean value of center along u direction
+            v_center_mean = np.mean(v_center_rec,axis = 0)#get mean value of center along v direction
+            self.dect_offset_vertical = - ((self.dect_elem_count_vertical-1) / 2.0 - np.squeeze(v_center_mean)) * self.dect_elem_height
+            self.dect_offset_horizontal = ((self.dect_elem_count_horizontal-1) / 2.0 - np.squeeze(u_center_mean)) * self.dect_elem_width
+            self.total_scan_angle = total_scan_angle / (self.view_num - 1) * self.view_num
+            self.source_isocenter_dis = np.sqrt( np.squeeze( np.mean( np.sum(np.multiply(x_s_rec_final,x_s_rec_final), axis = 0), axis = 0)))
+            self.source_dect_dis = np.sqrt( np.squeeze( np.mean( np.sum(np.multiply(x_d_center_x_s_rec_final[0:2,:],x_d_center_x_s_rec_final[0:2,:]), axis = 0), axis = 0)))
+            print('Parameters are updated from PMatrix:')
+            print('Mean Offset values are %.2f mm and %.2f mm for horizontal and vertical direction respectively;' \
+                  %( self.dect_offset_horizontal, self.dect_offset_vertical))
+            print('Total Scan Angle is %.2f degrees;' \
+                  %( self.total_scan_angle / PI * 180.0))
+            print('Mean Source to Isocenter Distance is %.2f mm;' %(self.source_isocenter_dis))
+            print('Mean Source to Detector Distance is %.2f mm.' %(self.source_dect_dis))
+            
             
         ## Change the projection matrix values if the detector pixel size for pmatrix is different from the CT scan
         ## The original pmatrix need to be modified
@@ -915,7 +1012,8 @@ class Mgfbp:
                     
                     distance_weight = 0.0
                     if curved_dect:
-                        distance_weight = 1.0 / ((pix_to_source_parallel_dis * pix_to_source_parallel_dis) + (x * ti.sin(angle_this_view_exclude_img_rot) - y * ti.cos(angle_this_view_exclude_img_rot)) \
+                        distance_weight = 1.0 / ((pix_to_source_parallel_dis * pix_to_source_parallel_dis) + \
+                                                 (x * ti.sin(angle_this_view_exclude_img_rot) - y * ti.cos(angle_this_view_exclude_img_rot)) \
                                                 * (x * ti.sin(angle_this_view_exclude_img_rot) - y * ti.cos(angle_this_view_exclude_img_rot)))
                     else:
                         distance_weight = 1.0 / (pix_to_source_parallel_dis * pix_to_source_parallel_dis)
@@ -1091,6 +1189,10 @@ def ReadConfigFile(file_path):
     # 现在，json_data包含了从JSONC文件中解析出的数据
     # print(json_data)
     return json_data
+
+def XuLeastSquareSolution(matrix_A,vec_y):
+    temp = np.matmul(np.linalg.inv(np.matmul(matrix_A.transpose(), matrix_A)), matrix_A.transpose())
+    return np.matmul(temp,vec_y)
     
 
                 

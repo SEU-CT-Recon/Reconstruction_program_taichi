@@ -98,11 +98,47 @@ class Mgfpj:
     def __init__(self, config_dict):
         self.config_dict = config_dict
         ######## parameters related to input and output filenames ########
-        self.input_dir = config_dict['InputDir']
-        self.output_dir = config_dict['OutputDir']
-        self.input_files_pattern = config_dict['InputFiles']
-        self.output_file_prefix = config_dict['OutputFilePrefix']
-        self.output_file_replace = config_dict['OutputFileReplace']
+        if 'InputDir' in config_dict:
+            self.input_dir = config_dict['InputDir']
+            if not isinstance(self.input_dir,str):
+                print('ERROR: InputDir must be a string!')
+                sys.exit()
+        else:
+            print('ERROR: Can not find InputDir!')
+            sys.exit()
+            
+        if 'OutputDir' in config_dict:
+            self.output_dir = config_dict['OutputDir']
+            if not isinstance(self.output_dir,str):
+                print('ERROR: OutputDir must be a string!')
+                sys.exit()
+        else:
+            print('ERROR: Can not find OutputDir!')
+            sys.exit()
+        
+        if 'InputFiles' in config_dict:
+            self.input_files_pattern = config_dict['InputFiles']
+            if not isinstance(self.input_files_pattern,str):
+                print('ERROR: InputFiles must be a string!')
+                sys.exit()
+        else:
+            print('ERROR: Can not find InputFiles!')
+            sys.exit()
+        
+        if 'OutputFilePrefix' in config_dict:
+            self.output_file_prefix = config_dict['OutputFilePrefix']
+            if not isinstance(self.output_file_prefix,str):
+                print('ERROR: OutputFilePrefix must be a string!')
+                sys.exit()
+        else:
+            print('Warning: Can not find OutputFilePrefix! Set to be an empty string. ')
+            self.output_file_prefix = ""
+        
+        if 'OutputFileReplace' in config_dict:
+            self.output_file_replace = config_dict['OutputFileReplace']
+        else:
+            print("ERROR: Can not find OutputFileReplace in the config file!")
+            sys.exit()
 
         # NEW! Select the form of the output files
         if 'OutputFileForm' in config_dict:
@@ -116,9 +152,26 @@ class Mgfpj:
             self.output_file_form = "sinogram"
 
         ########  parameters related to the input image volume (slice) ########
-        self.img_dim = config_dict['ImageDimension']
-        self.img_pix_size = config_dict['PixelSize']
-        # image dimension along z direction
+        if 'ImageDimension' in config_dict:
+            self.img_dim = config_dict['ImageDimension']
+            if self.img_dim<0 or not isinstance(self.img_dim, int):
+                print('ERROR: ImageDimension must be a positive integer!')
+                sys.exit()
+        else:
+            print('ERROR: can not find ImageDimension!')
+            sys.exit()
+        if 'PixelSize' in config_dict:
+            self.img_pix_size = config_dict['PixelSize']
+            if not isinstance(self.img_pix_size, float) and not isinstance(self.img_pix_size, int):
+                print('ERROR: PixelSize must be a number!')
+                sys.exit()
+            if self.img_pix_size < 0:
+                print('ERROR: PixelSize must be positive!')
+                sys.exit()
+        else:
+            print('ERROR: can not find PixelSize!')
+            sys.exit()
+               
         if 'SliceCount' in config_dict:
             # 根据mgfpj现有的规则用SliceCount表示image的z维度而非用imageSliceCount
             # compatible with C++ version
@@ -126,39 +179,53 @@ class Mgfpj:
         elif 'ImageDimensionZ' in config_dict:
             self.img_dim_z = config_dict['ImageDimensionZ']
         else:
-            print(
-                "ERROR: Can not find image dimension along Z direction!")
+            print("ERROR: Can not find image dimension along Z direction (ImageDimensionZ or SliceCount)!")
+            sys.exit() 
+        if not isinstance(self.img_dim_z,int) or self.img_dim_z <= 0:
+            print('ERROR: ImageDimensionZ (ImageSliceCount) must be a positive integer!')
             sys.exit()
         
         # image center along x and y direction
         if 'ImageCenter' in config_dict:
             self.img_center = config_dict['ImageCenter']
+            if not isinstance(self.img_center,list) or len(self.img_center)!=2:
+                print('ERROR: ImageCenter must be an array with two numbers!')
+                sys.exit()
             self.img_center_x = self.img_center[0]
             self.img_center_y = self.img_center[1]
         else:
-            self.img_center = [0, 0]
-            self.img_center_x = 0
-            self.img_center_y = 0
+            self.img_center_x = 0.0
+            self.img_center_y = 0.0
 
         # img center along z direction
         if 'ImageCenterZ' in config_dict:
             self.img_center_z = config_dict['ImageCenterZ']
+            if not isinstance(self.img_center_z,float) and not isinstance(self.img_center_z,int):
+                print('ERROR: ImageCenterZ must be a number!')
+                sys.exit()
         else:
-            self.img_center_z = 0
+            self.img_center_z = 0.0
 
         if 'ConeBeam' in config_dict:
             self.cone_beam = config_dict['ConeBeam']
+            if not isinstance(self.cone_beam,bool):
+                print('ERROR: ConeBeam must be true or false!')
+                sys.exit()
         else:
             self.cone_beam = False
 
         ######## parameters related to the detector ########
         # detector type (flat panel or curved)
         if 'CurvedDetector' in config_dict:
-            self.curved_dect = config_dict['CurvedDetector']
+            if isinstance(config_dict['CurvedDetector'], bool):
+                self.curved_dect = config_dict['CurvedDetector']
+            else:
+                print("ERROR: CurvedDetector can only be true or false!")
+                sys.exit()
             if self.curved_dect:
                 print("--Curved detector")
         else:
-            self.curved_dect = False
+            self.curved_dect = False 
 
         if 'DetectorElementCountHorizontal' in config_dict:
             self.dect_elem_count_horizontal = config_dict['DetectorElementCountHorizontal']
@@ -167,8 +234,13 @@ class Mgfpj:
         elif 'DetectorElementCount' in config_dict:
             self.dect_elem_count_horizontal = config_dict['DetectorElementCount']
         else:
-            print(
-                "ERROR: Can not find detector element count along horizontal direction!")
+            print("ERROR: Can not find DetectorElementCountHorizontal (SinogramWidth or DetectorElementCount)!")
+            sys.exit()
+        if self.dect_elem_count_horizontal <= 0:
+            print("ERROR: DetectorElementCountHorizontal (SinogramWidth) should be larger than 0!")
+            sys.exit()
+        elif self.dect_elem_count_horizontal % 1 != 0:
+            print("ERROR: DetectorElementCountHorizontal (SinogramWidth) should be an integer!")
             sys.exit()
 
         if 'DetectorElementWidth' in config_dict:
@@ -176,7 +248,10 @@ class Mgfpj:
         elif 'DetectorElementSize' in config_dict:
             self.dect_elem_width = config_dict['DetectorElementSize']
         else:
-            print("ERROR: Can not find detector element width!")
+            print("ERROR: Can not find DetectorElementWidth (DetectorElementSize)!")
+            sys.exit()
+        if self.dect_elem_width <= 0:
+            print("ERROR: DetectorElementWidth (DetectorElementSize) should be larger than 0!")
             sys.exit()
 
         if 'DetectorOffcenter' in config_dict:
@@ -184,13 +259,37 @@ class Mgfpj:
         elif 'DetectorOffsetHorizontal' in config_dict:
             self.dect_offset_horizontal = config_dict['DetectorOffsetHorizontal']
         else:
-            print(
-                "Warning: Can not find horizontal detector offset; Using default value 0")
+            self.dect_offset_horizontal = 0.0
+            print("Warning: Can not find DetectorOffsetHorizontal (DetectorOffcenter); Using default value 0")
             # self.return_information += "--Warning: Can not find horizontal detector offset; Using default value 0\n"
+        if not isinstance(self.dect_offset_horizontal, float) and not isinstance(self.dect_offset_horizontal, int):
+            print("ERROR: DetectorOffsetHorizontal (DetectorOffcenter) should be a number!")
+            sys.exit()
 
         ######## CT scan parameters ########
-        self.source_isocenter_dis = config_dict['SourceIsocenterDistance']
-        self.source_dect_dis = config_dict['SourceDetectorDistance']
+        if 'SourceIsocenterDistance' in config_dict:
+            self.source_isocenter_dis = config_dict['SourceIsocenterDistance']
+            if not isinstance(self.source_isocenter_dis, float) and not isinstance(self.source_isocenter_dis, int):
+                print('ERROR: SourceIsocenterDistance must be a number!')
+                sys.exit()
+            if self.source_isocenter_dis<=0.0:
+                print('ERROR: SourceIsocenterDistance must be positive!')
+                sys.exit()
+        else:
+            self.source_isocenter_dis = self.dect_elem_count_horizontal * self.dect_elem_width * 1000.0
+            print('Warning: Did not find SourceIsocenterDistance; Set to infinity!')
+            
+        if 'SourceDetectorDistance' in config_dict:
+            self.source_dect_dis = config_dict['SourceDetectorDistance']
+            if not isinstance(self.source_dect_dis, float) and not isinstance(self.source_dect_dis, int):
+                print('ERROR: SourceDetectorDistance must be a number!')
+                sys.exit()
+            if self.source_dect_dis<=0.0:
+                print('ERROR: SourceDetectorDistance must be positive!')
+                sys.exit()
+        else:
+            self.source_dect_dis = self.dect_elem_count_horizontal * self.dect_elem_width * 1000.0
+            print('Warning: Did not find SourceDetectorDistance; Set to infinity!')
         
         # image rotation (Start Angle) for forward projection
         if 'StartAngle' in config_dict:
@@ -199,11 +298,17 @@ class Mgfpj:
             self.start_angle = config_dict['ImageRotation'] / 180.0 * PI   
         else:
             self.start_angle = 0.0
+        if not isinstance(self.start_angle, float) and not isinstance(self.start_angle, int):
+            print('ERROR: ImageRotation must be a number!')
+            sys.exit()
             
         if 'TotalScanAngle' in config_dict:
             self.scan_angle = config_dict['TotalScanAngle'] / 180.0 * PI
         else:
             self.scan_angle = 2 * PI
+        if not isinstance(self.scan_angle, float) and not isinstance(self.scan_angle, int):
+            print("ERROR: TotalScanAngle should be a number!")
+            sys.exit()
 
         if abs(self.scan_angle % (2*PI)) < (0.01 / 180 * PI):
             print('--Full scan, scan Angle = %.1f degrees' %
@@ -214,8 +319,15 @@ class Mgfpj:
                   (self.scan_angle / PI * 180))
             # self.return_information += '--Short scan, scan Angle = %.1f degrees\n' % (self.total_scan_angle / PI * 180)
 
-        self.view_num = config_dict['Views']
-
+        if 'Views' in config_dict:
+            self.view_num = config_dict['Views']
+        else:
+            print("ERROR: Can not find number of views!")
+            sys.exit()
+        if self.view_num%1!=0 or self.view_num<0:
+            print("ERROR: Views must be larger than 0 and must be an integer!")
+            sys.exit()
+            #mark
         ######## parameters related to fpj calculation ########
         if 'OversampleSize' in config_dict:
             # oversample along the horizontal direction
@@ -229,8 +341,8 @@ class Mgfpj:
         else:
             self.fpj_step_size = 0.2
 
-        if 'PmatrixDetectorElementSize' in config_dict:
-            self.pmatrix_dect_elem_width = config_dict['PmatrixDetectorElementSize']
+        if 'PMatrixDetectorElementSize' in config_dict:
+            self.pmatrix_dect_elem_width = config_dict['PMatrixDetectorElementSize']
         else:
             self.pmatrix_dect_elem_width = self.dect_elem_width
 
@@ -261,8 +373,7 @@ class Mgfpj:
             elif 'DetectorElementHeight' in config_dict:
                 self.dect_elem_height = config_dict['DetectorElementHeight']
             else:
-                print(
-                    "ERROR: Can not find detector element height for cone beam recon! ")
+                print("ERROR: Can not find detector element height for cone beam recon! ")
                 sys.exit()
 
             # detector offset vertical
@@ -271,9 +382,8 @@ class Mgfpj:
             elif 'DetectorOffsetVertical' in config_dict:
                 self.dect_offset_vertical = config_dict['DetectorOffsetVertical']
             else:
-                self.dect_offset_vertical = 0
-                print(
-                    "Warning: Can not find vertical detector offset for cone beam recon; Using default value 0")
+                self.dect_offset_vertical = 0.0
+                print("Warning: Can not find vertical detector offset for cone beam recon; Using default value 0")
         else:
             self.dect_elem_count_vertical = self.img_dim_z
             self.img_voxel_height = 0.0
@@ -351,7 +461,7 @@ class Mgfpj:
                                   v_idx: ti.i32, fpj_step_size: ti.f32, img_center_x: ti.f32,
                                   img_center_y: ti.f32, img_center_z: ti.f32, curved_dect: ti.i32):
 
-        # This new version of code assumes that the gantry stays the same
+        # This new version of code assumes that the gantry stays stationary
         # while the image object rotates
         # this can simplify the calculation
 
