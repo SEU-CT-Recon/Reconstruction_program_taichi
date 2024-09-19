@@ -463,7 +463,7 @@ class Mgfbp:
         
         if self.cone_beam:
             print("--Cone beam recon")
-                        
+            
             #detector element height
             if 'SliceThickness' in config_dict:
                 self.dect_elem_height = config_dict['SliceThickness']
@@ -479,18 +479,6 @@ class Mgfbp:
                 print('ERROR: DetectorElementHeight (SliceThickness) must be positive!')
                 sys.exit()
                 
-            #detector offset vertical
-            if 'SliceOffCenter' in config_dict:
-                self.dect_offset_vertical = config_dict['SliceOffCenter'] 
-            elif 'DetectorOffsetVertical' in config_dict:
-                self.dect_offset_vertical = config_dict['DetectorOffsetVertical']
-            else: 
-                self.dect_offset_vertical = 0
-                print("Warning: Can not find vertical detector offset for cone beam recon; Using default value 0")
-            if not isinstance(self.dect_offset_vertical,float) and not isinstance(self.dect_offset_vertical,int):
-                print('ERROR: DetectorOffsetVertical (SliceOffCenter) must be a number!')
-                sys.exit()
-            
             #image dimension along z direction
             if 'ImageSliceCount' in config_dict:
                 self.img_dim_z = config_dict['ImageSliceCount']
@@ -517,6 +505,81 @@ class Mgfbp:
             if self.img_voxel_height <= 0:
                 print('ERROR: VoxelHeight (ImageSliceThickness) must be positive!')
                 sys.exit()
+            
+            ######### projection matrix recon parameters ########
+            ##Projection matrix is only effective for cone beam reconstruction##
+            self.array_pmatrix_taichi = ti.field(dtype=ti.f32, shape=self.view_num * 12)
+            if 'PMatrixFile' in config_dict:
+                temp_dict = ReadConfigFile(config_dict['PMatrixFile'])
+                if 'Value' in temp_dict:
+                    self.array_pmatrix = temp_dict['Value']
+                    if not isinstance(self.array_pmatrix,list):
+                        print('ERROR: PMatrixFile.Value is not an array')
+                        sys.exit()
+                    if len(self.array_pmatrix) != self.view_num * 12:
+                        print(f'ERROR: view number is {self.view_num:d} while pmatrix has {len(self.array_pmatrix):d} elements!')
+                        sys.exit()
+                    self.array_pmatrix = np.array(self.array_pmatrix,dtype = np.float32)
+                    self.array_pmatrix_taichi.from_numpy(self.array_pmatrix)
+                    self.bool_apply_pmatrix = True
+                    print("--PMatrix applied")
+                else:
+                    print("ERROR: PMatrixFile has no member named 'Value'!")
+                    sys.exit()
+            else:
+                self.bool_apply_pmatrix = False
+            
+            if self.bool_apply_pmatrix:
+                ## Change the projection matrix Values if a different detector binning is applied for obj CT scan
+                ## compared with the binning mode for pmatrix
+                if 'PMatrixDetectorElementWidth' in config_dict:
+                    print('--PMatrix detector pixel width is different from the CT scan')
+                    self.pmatrix_elem_width = config_dict['PMatrixDetectorElementWidth'];
+                    if not isinstance(self.pmatrix_elem_width,float) and not isinstance(self.pmatrix_elem_width,int):
+                        print('ERROR: PMatrixDetectorElementWidth must be a number!')
+                        sys.exit()
+                    if self.pmatrix_elem_width <= 0:
+                        print('ERROR: PMatrixDetectorElementWidth must be positive!')
+                        sys.exit()
+                else:
+                    self.pmatrix_elem_width = self.dect_elem_width;
+                
+                if 'PMatrixDetectorElementHeight' in config_dict:
+                    print('--PMatrix detector pixel height is different from the CT scan')
+                    self.pmatrix_elem_height = config_dict['PMatrixDetectorElementHeight'];
+                    if not isinstance(self.pmatrix_elem_height,float) and not isinstance(self.pmatrix_elem_height,int):
+                        print('ERROR: PMatrixDetectorElementHeight must be a number!')
+                        sys.exit()
+                    if self.pmatrix_elem_height <= 0:
+                        print('ERROR: PMatrixDetectorElementHeight must be positive!')
+                        sys.exit()
+                else:
+                    self.pmatrix_elem_height = self.dect_elem_height;
+                    
+                self.ChangePMatrix_SourceTrajectory()
+                #save the updated parameters values to the dictionary
+                config_dict['SourceIsocenterDistance'] = self.source_isocenter_dis
+                config_dict['SourceDetectorDistance'] = self.source_dect_dis
+                config_dict['DetectorOffsetHorizontal'] = self.dect_offset_horizontal
+                config_dict['DetectorOffsetVertical'] = self.dect_offset_vertical
+                config_dict['TotalScanAngle'] = self.total_scan_angle / PI * 180.0
+                self.ChangePMatrix_PMatrixPixelSize()
+                self.ChangePMatrix_VerticalReconRange()
+                self.array_pmatrix_taichi.from_numpy(self.array_pmatrix) #update the taichi array
+                
+            if not self.bool_apply_pmatrix:
+                #detector offset vertical (is only effective when pmatrix is not applied)
+                if 'SliceOffCenter' in config_dict:
+                    self.dect_offset_vertical = config_dict['SliceOffCenter'] 
+                elif 'DetectorOffsetVertical' in config_dict:
+                    self.dect_offset_vertical = config_dict['DetectorOffsetVertical']
+                else: 
+                    self.dect_offset_vertical = 0
+                    print("Warning: Can not find vertical detector offset for cone beam recon; Using default value 0")
+                if not isinstance(self.dect_offset_vertical,float) and not isinstance(self.dect_offset_vertical,int):
+                    print('ERROR: DetectorOffsetVertical (SliceOffCenter) must be a number!')
+                    sys.exit()
+            
                 
             #img center along z direction
             if 'ImageCenterZ' in config_dict:
@@ -525,6 +588,8 @@ class Mgfbp:
                     print('ERROR: ImageCenterZ must be a number!')
                     sys.exit()
             else:
+                #ImageCenterZ is calculated from detector offset along vertical direction
+                #may use the updated value
                 current_center_row_idx = (self.dect_elem_vertical_recon_range_end +  self.dect_elem_vertical_recon_range_begin)/2
                 distance_to_original_detector_center_row = (current_center_row_idx - (self.dect_elem_count_vertical-1)/2) * self.dect_elem_height
                 if self.first_slice_top_row:
@@ -542,190 +607,6 @@ class Mgfbp:
             self.img_voxel_height = 0.0
             self.img_center_z = 0
         
-            
-        ######### projection matrix recon parameters ########
-        self.array_pmatrix_taichi = ti.field(dtype=ti.f32, shape=self.view_num * 12)
-        if 'PMatrixFile' in config_dict:
-            temp_dict = ReadConfigFile(config_dict['PMatrixFile'])
-            if 'Value' in temp_dict:
-                self.array_pmatrix = temp_dict['Value']
-                if not isinstance(self.array_pmatrix,list):
-                    print('ERROR: PMatrixFile.Value is not an array')
-                    sys.exit()
-                if len(self.array_pmatrix) != self.view_num * 12:
-                    print(f'ERROR: view number is {self.view_num:d} while pmatrix has {len(self.array_pmatrix):d} elements!')
-                    sys.exit()
-                self.array_pmatrix = np.array(self.array_pmatrix,dtype = np.float32)
-                self.array_pmatrix_taichi.from_numpy(self.array_pmatrix)
-                self.bool_apply_pmatrix = 1
-                print("--PMatrix applied")
-            else:
-                print("ERROR: PMatrixFile has no member named 'Value'!")
-                sys.exit()
-        else:
-            self.bool_apply_pmatrix = 0
-        
-        ## Change the projection matrix Values if a different detector binning is applied for obj CT scan
-        ## compared with the binning mode for pmatrix
-        if 'PMatrixDetectorElementWidth' in config_dict:
-            print('--PMatrix detector pixel width is different from the CT scan')
-            self.pmatrix_elem_width = config_dict['PMatrixDetectorElementWidth'];
-            if not isinstance(self.pmatrix_elem_width,float) and not isinstance(self.pmatrix_elem_width,int):
-                print('ERROR: PMatrixDetectorElementWidth must be a number!')
-                sys.exit()
-            if self.pmatrix_elem_width <= 0:
-                print('ERROR: PMatrixDetectorElementWidth must be positive!')
-                sys.exit()
-        else:
-            self.pmatrix_elem_width = self.dect_elem_width;
-        
-        if 'PMatrixDetectorElementHeight' in config_dict:
-            print('--PMatrix detector pixel height is different from the CT scan')
-            self.pmatrix_elem_height = config_dict['PMatrixDetectorElementHeight'];
-            if not isinstance(self.pmatrix_elem_height,float) and not isinstance(self.pmatrix_elem_height,int):
-                print('ERROR: PMatrixDetectorElementHeight must be a number!')
-                sys.exit()
-            if self.pmatrix_elem_height <= 0:
-                print('ERROR: PMatrixDetectorElementHeight must be positive!')
-                sys.exit()
-        else:
-            self.pmatrix_elem_height = self.dect_elem_height;
-            
-        ## Change the projection matrix values
-        ## If the plane of the source position is not perpendicular to the z-axis
-        ## and the source position of the first view is not located on the +x-axis 
-        ## The original pmatrix need to be modified
-        x_s_rec = np.zeros(shape = (3,self.view_num))
-        if self.bool_apply_pmatrix:
-            for view_idx in range(self.view_num):
-                pmatrix_this_view = self.array_pmatrix[(view_idx*12):(view_idx+1)*12]#get the pmatrix for this view
-                pmatrix_this_view = np.reshape(pmatrix_this_view,[3,4])#reshape it to be 3x4 matrix
-                matrix_A = np.linalg.inv(pmatrix_this_view[:,0:3])#matrix A is the inverse of the 3x3 matrix from the first three columns
-                x_s_rec[:,view_idx:view_idx+1]=- np.matmul(matrix_A,pmatrix_this_view[:,3]).reshape([3,1])#calculate the source position
-            
-            #after getting the position of the source, we need to calculate the plane of the source trajectory
-            #assume the plane is defined as a*x + b*y + c*z = 1
-            matrix_A = x_s_rec.transpose()
-            vec_y = np.ones(shape = (self.view_num,1))
-            sol = XuLeastSquareSolution(matrix_A, vec_y) #solve a, b and c using least squared method
-            
-            angle_y = np.arctan(sol[0] / sol[2]) #first rotate along y axis
-            angle_x = np.arctan(sol[1] / np.sqrt( sol[0]**2 + sol[2] ** 2 )) * np.sign(sol[2]) #then rotate along x axis
-            rotation_matrix_y = np.array([[math.cos(angle_y),0,-math.sin(angle_y)],[0,1,0],[math.sin(angle_y),0,math.cos(angle_y)]])
-            rotation_matrix_x = np.array([[1,0,0],[0,math.cos(angle_x),-math.sin(angle_x)],[0,math.sin(angle_x),math.cos(angle_x)]])
-            x_s_rec_rot = np.matmul(rotation_matrix_x,np.matmul(rotation_matrix_y,x_s_rec))
-            z_c = np.mean(x_s_rec_rot[2,:]) #center of the circle along the z-direction
-            
-            x_s_xy_plane = x_s_rec_rot[0:2,:] #get the position when the points are projected onto the xy plane
-            #after the projection operation, we need to determine the center for a 2D circle, which is easy
-            #assume the circle is x^2 + y^2 - a*x - b*y + c = 0
-            matrix_A = np.concatenate((-x_s_xy_plane.transpose(),np.ones(shape=(self.view_num,1))),axis = 1)
-            vec_y = -np.sum(x_s_xy_plane**2,axis = 0)
-            sol = XuLeastSquareSolution(matrix_A, vec_y) # solution for a b and c; center is a/2 and b/2
-            x_s_rec_rot_shift_xyz = x_s_rec_rot - np.array([[sol[0]/2],[sol[1]/2],[z_c]]) 
-            # get the position of the source when it is shifted so that the center of the circle is at the origin.
-            # now the source trajectory is in the x-y plane and the circle of the center is located as the origin.
-            # we need to rotate it along the z-axis so that for the first view, the source is located at +x axis. 
-            angle_z = math.atan2(x_s_rec_rot_shift_xyz[1,0],x_s_rec_rot_shift_xyz[0,0])
-            rotation_matrix_z = np.array([[math.cos(angle_z),math.sin(angle_z),0],[-math.sin(angle_z),math.cos(angle_z),0],[0,0,1]])
-            x_s_rec_final = np.matmul(rotation_matrix_z,x_s_rec_rot_shift_xyz)#final source positions
-            rotation_matrix_total = np.matmul(rotation_matrix_z,np.matmul(rotation_matrix_x,rotation_matrix_y)) 
-            #multiply three rotation operations together
-            
-            v_center_rec = np.zeros(shape = (self.view_num,1))#array to record the center along v direction
-            u_center_rec = np.zeros(shape = (self.view_num,1))#array to record the center along u direction
-            total_scan_angle = 0.0
-            x_d_center_x_s_rec_final = np.zeros(shape = (3, self.view_num))#array to record the center along u direction
-            for view_idx in range(self.view_num):
-                pmatrix_this_view = self.array_pmatrix[(view_idx*12):(view_idx+1)*12]#get the pmatrix for this view
-                pmatrix_this_view = np.reshape(pmatrix_this_view,[3,4])#reshape it to be 3x4 matrix
-                matrix_A = np.linalg.inv(pmatrix_this_view[:,0:3])#matrix A is the inverse of the 3x3 matrix from the first three columns
-                e_v_0 = matrix_A[:,1] #calculate the unit vector along detector vertical direction
-                e_u_0 = matrix_A[:,0] #calculate the unit vector along detector horizontal direction
-                pixel_size_ratio = (self.pmatrix_elem_width / np.linalg.norm(e_u_0) + self.pmatrix_elem_height / np.linalg.norm(e_u_0)) * 0.5
-                #confirm the pixel size from pmatrix is the same with the preset pmatrix pixel size;
-                pmatrix_this_view = pmatrix_this_view / pixel_size_ratio #if not, need to normalize the pmatrix
-                
-                matrix_A = np.linalg.inv(pmatrix_this_view[:,0:3]) #matrix A is the inverse of the 3x3 matrix from the first three columns
-                x_s = x_s_rec_final[:,view_idx:view_idx+1] #calculate the source position
-                if view_idx <= self.view_num - 2:
-                    x_s_next_view =  x_s_rec_final[:,view_idx+1:view_idx+2]
-                    delta_angle = math.atan2(x_s_next_view[1], x_s_next_view[0]) - math.atan2(x_s[1], x_s[0])
-                    if abs(delta_angle) > PI:
-                        delta_angle = delta_angle - 2 * PI *np.sign(delta_angle)
-                    total_scan_angle = total_scan_angle + delta_angle
-                e_v_0 = matrix_A[:,1] #calculate the unit vector along detector vertical direction
-                e_u_0 = matrix_A[:,0] #calculate the unit vector along detector horizontal direction
-                e_v = np.matmul(rotation_matrix_total, e_v_0) #change the unit vector along detector vertical direction
-                e_u = np.matmul(rotation_matrix_total, e_u_0) #change the unit vector along detector horizontal direction
-                x_do_x_s = np.matmul(rotation_matrix_total, matrix_A[:,2]) #change x_do - x_s
-                matrix_A[:,0] = e_u; matrix_A[:,1] = e_v; matrix_A[:,2] = x_do_x_s; #update the matrix A
-                matrix_A_inverse = np.linalg.inv(matrix_A) #recalculate the inverse of matrix A
-                pmatrix_this_view = np.append(matrix_A_inverse, -np.matmul(matrix_A_inverse,x_s), axis = 1)#get the new pmatrix for this view
-                u_center_rec[view_idx, 0]= pmatrix_this_view[0,3] / pmatrix_this_view[2,3]#get center of the pixel along u direction
-                v_center_rec[view_idx, 0]= pmatrix_this_view[1,3] / pmatrix_this_view[2,3]#get center of the pixel along v direction
-                x_d_center_x_s_rec_final[:,view_idx:view_idx+1] = x_do_x_s.reshape((3,1)) + \
-                    u_center_rec[view_idx, 0] * e_u.reshape((3,1)) + v_center_rec[view_idx, 0] * e_v.reshape((3,1))
-                
-                pmatrix_this_view = np.reshape(pmatrix_this_view,[12,1])#reshape the matrix to be a vector
-                self.array_pmatrix[(view_idx*12):(view_idx+1)*12] = pmatrix_this_view[:,0] #update the pmatrix array
-            u_center_mean = np.mean(u_center_rec,axis = 0)#get mean value of center along u direction
-            v_center_mean = np.mean(v_center_rec,axis = 0)#get mean value of center along v direction
-            self.dect_offset_vertical = - ((self.dect_elem_count_vertical-1) / 2.0 - np.squeeze(v_center_mean)) * self.dect_elem_height
-            self.dect_offset_horizontal = ((self.dect_elem_count_horizontal-1) / 2.0 - np.squeeze(u_center_mean)) * self.dect_elem_width
-            self.total_scan_angle = total_scan_angle / (self.view_num - 1) * self.view_num
-            self.source_isocenter_dis = np.sqrt( np.squeeze( np.mean( np.sum(np.multiply(x_s_rec_final,x_s_rec_final), axis = 0), axis = 0)))
-            self.source_dect_dis = np.sqrt( np.squeeze( np.mean( np.sum(np.multiply(x_d_center_x_s_rec_final[0:2,:],x_d_center_x_s_rec_final[0:2,:]), axis = 0), axis = 0)))
-            print('Parameters are updated from PMatrix:')
-            print('Mean Offset values are %.2f mm and %.2f mm for horizontal and vertical direction respectively;' \
-                  %( self.dect_offset_horizontal, self.dect_offset_vertical))
-            print('Total Scan Angle is %.2f degrees;' \
-                  %( self.total_scan_angle / PI * 180.0))
-            print('Mean Source to Isocenter Distance is %.2f mm;' %(self.source_isocenter_dis))
-            print('Mean Source to Detector Distance is %.2f mm.' %(self.source_dect_dis))
-            config_dict['SourceIsocenterDistance'] = self.source_isocenter_dis
-            config_dict['SourceDetectorDistance'] = self.source_dect_dis
-            config_dict['DetectorOffsetHorizontal'] = self.dect_offset_horizontal
-            config_dict['DetectorOffsetVertical'] = self.dect_offset_vertical
-            config_dict['TotalScanAngle'] = self.total_scan_angle / PI * 180.0
-            
-            
-        ## Change the projection matrix values if the detector pixel size for pmatrix is different from the CT scan
-        ## The original pmatrix need to be modified
-        if self.bool_apply_pmatrix:
-            for view_idx in range(self.view_num):
-                pmatrix_this_view = self.array_pmatrix[(view_idx*12):(view_idx+1)*12]#get the pmatrix for this view
-                pmatrix_this_view = np.reshape(pmatrix_this_view,[3,4])#reshape it to be 3x4 matrix
-                matrix_A = np.linalg.inv(pmatrix_this_view[:,0:3])#matrix A is the inverse of the 3x3 matrix from the first three columns
-                x_s = - np.matmul(matrix_A,pmatrix_this_view[:,3]).reshape([3,1])#calculate the source position
-                e_v_0 = matrix_A[:,1] #calculate the unit vector along detector vertical direction
-                e_u_0 = matrix_A[:,0] #calculate the unit vector along detector horizontal direction
-                e_v = e_v_0 * self.dect_elem_height / self.pmatrix_elem_height #change the unit vector along detector vertical direction
-                e_u = e_u_0 * self.dect_elem_width / self.pmatrix_elem_width #change the unit vector along detector horizontal direction
-                x_do_x_s = matrix_A[:,2] + np.multiply(0.5, e_v - e_v_0) + np.multiply(0.5, e_u - e_v_0)#change x_do - x_s
-                matrix_A[:,0] = e_u; matrix_A[:,1] = e_v; matrix_A[:,2] = x_do_x_s; #update the matrix A
-                matrix_A_inverse = np.linalg.inv(matrix_A) #recalculate the inverse of matrix A
-                pmatrix_this_view = np.append(matrix_A_inverse, -np.matmul(matrix_A_inverse,x_s), axis = 1)#get the new pmatrix for this view
-                pmatrix_this_view = np.reshape(pmatrix_this_view,[12,1])#reshape the matrix to be a vector
-                self.array_pmatrix[(view_idx*12):(view_idx+1)*12] = pmatrix_this_view[:,0] #update the pmatrix array
-            
-        ## Change the projection matrix values if vertical recon range is applied
-        ## The original pmatrix need to be modified
-        if self.bool_apply_pmatrix:
-            for view_idx in range(self.view_num):
-                pmatrix_this_view = self.array_pmatrix[(view_idx*12):(view_idx+1)*12]#get the pmatrix for this view
-                pmatrix_this_view = np.reshape(pmatrix_this_view,[3,4])#reshape it to be 3x4 matrix
-                matrix_A = np.linalg.inv(pmatrix_this_view[:,0:3])#matrix A is the inverse of the 3x3 matrix from the first three columns
-                x_s = - np.matmul(matrix_A,pmatrix_this_view[:,3]).reshape([3,1])#calculate the source position
-                e_v = matrix_A[:,1]#calculate the unit vector along detector vertical direction
-                matrix_A[:,2] = matrix_A[:,2] + np.multiply(self.dect_elem_vertical_recon_range_begin, e_v)
-                #calculate the new x_do - x_s
-                
-                matrix_A_inverse = np.linalg.inv(matrix_A) #recalculate the inverse of matrix A
-                pmatrix_this_view = np.append(matrix_A_inverse, -np.matmul(matrix_A_inverse,x_s), axis = 1)#get the new pmatrix for this view
-                pmatrix_this_view = np.reshape(pmatrix_this_view,[12,1])#reshape the matrix to be a vector
-                self.array_pmatrix[(view_idx*12):(view_idx+1)*12] = pmatrix_this_view[:,0] #update the pmatrix array
-            self.array_pmatrix_taichi.from_numpy(self.array_pmatrix)#update the taichi array
             
         self.img_recon = np.zeros((self.img_dim_z,self.img_dim,self.img_dim),dtype = np.float32)
         self.img_sgm = np.zeros((self.dect_elem_count_vertical_actual, self.view_num, self.dect_elem_count_horizontal),dtype = np.float32)
@@ -754,14 +635,149 @@ class Mgfbp:
         
         if 'SaveModifiedConfigName' in config_dict:
             if isinstance(config_dict['SaveModifiedConfigName'], str):
-                save_jsonc(config_dict['SaveModifiedConfigName'], config_dict)
-                print('Modified config file is saved to %s.' %(config_dict['SaveModifiedConfigName']))
+                save_config_file_name = config_dict['SaveModifiedConfigName']
+                del config_dict['SaveModifiedConfigName']
+                save_jsonc(save_config_file_name, config_dict)
+                print('Modified config file is saved to %s.' %(save_config_file_name))
             else:
-                print('ERROR: SaveModifiedConfigName must be a string! ')
+                print('ERROR: SaveModifiedConfigName must be a string!')
                 sys.exit()
             
+    def ChangePMatrix_SourceTrajectory(self):
+        ## Change the projection matrix values
+        ## If the plane of the source position is not perpendicular to the z-axis
+        ## and the source position of the first view is not located on the +x-axis 
+        ## The original pmatrix need to be modified
+        x_s_rec = np.zeros(shape = (3,self.view_num))
+        for view_idx in range(self.view_num):
+            pmatrix_this_view = self.array_pmatrix[(view_idx*12):(view_idx+1)*12]#get the pmatrix for this view
+            pmatrix_this_view = np.reshape(pmatrix_this_view,[3,4])#reshape it to be 3x4 matrix
+            matrix_A = np.linalg.inv(pmatrix_this_view[:,0:3])#matrix A is the inverse of the 3x3 matrix from the first three columns
+            x_s_rec[:,view_idx:view_idx+1]=- np.matmul(matrix_A,pmatrix_this_view[:,3]).reshape([3,1])#calculate the source position
+        #after getting the position of the source, we need to calculate the plane of the source trajectory
+        #assume the plane is defined as a*x + b*y + c*z = 1
+        matrix_A = x_s_rec.transpose()
+        vec_y = np.ones(shape = (self.view_num,1))
+        sol = XuLeastSquareSolution(matrix_A, vec_y) #solve a, b and c using least squared method
         
-    
+        angle_y = np.arctan(sol[0] / sol[2]) #first rotate along y axis
+        angle_x = np.arctan(sol[1] / np.sqrt( sol[0]**2 + sol[2] ** 2 )) * np.sign(sol[2]) #then rotate along x axis
+        rotation_matrix_y = np.array([[math.cos(angle_y),0,-math.sin(angle_y)],[0,1,0],[math.sin(angle_y),0,math.cos(angle_y)]])
+        rotation_matrix_x = np.array([[1,0,0],[0,math.cos(angle_x),-math.sin(angle_x)],[0,math.sin(angle_x),math.cos(angle_x)]])
+        x_s_rec_rot = np.matmul(rotation_matrix_x,np.matmul(rotation_matrix_y,x_s_rec))
+        z_c = np.mean(x_s_rec_rot[2,:]) #center of the circle along the z-direction
+        
+        x_s_xy_plane = x_s_rec_rot[0:2,:] #get the position when the points are projected onto the xy plane
+        #after the projection operation, we need to determine the center for a 2D circle, which is easy
+        #assume the circle is x^2 + y^2 - a*x - b*y + c = 0
+        matrix_A = np.concatenate((-x_s_xy_plane.transpose(),np.ones(shape=(self.view_num,1))),axis = 1)
+        vec_y = -np.sum(x_s_xy_plane**2,axis = 0)
+        sol = XuLeastSquareSolution(matrix_A, vec_y) # solution for a b and c; center is a/2 and b/2
+        x_s_rec_rot_shift_xyz = x_s_rec_rot - np.array([[sol[0]/2],[sol[1]/2],[z_c]]) 
+        # get the position of the source when it is shifted so that the center of the circle is at the origin.
+        # now the source trajectory is in the x-y plane and the circle of the center is located as the origin.
+        # we need to rotate it along the z-axis so that for the first view, the source is located at +x axis. 
+        angle_z = math.atan2(x_s_rec_rot_shift_xyz[1,0],x_s_rec_rot_shift_xyz[0,0])
+        rotation_matrix_z = np.array([[math.cos(angle_z),math.sin(angle_z),0],[-math.sin(angle_z),math.cos(angle_z),0],[0,0,1]])
+        x_s_rec_final = np.matmul(rotation_matrix_z,x_s_rec_rot_shift_xyz)#final source positions
+        rotation_matrix_total = np.matmul(rotation_matrix_z,np.matmul(rotation_matrix_x,rotation_matrix_y)) 
+        #multiply three rotation operations together
+        
+        v_center_rec = np.zeros(shape = (self.view_num,1))#array to record the center along v direction
+        u_center_rec = np.zeros(shape = (self.view_num,1))#array to record the center along u direction
+        total_scan_angle = 0.0
+        x_d_center_x_s_rec_final = np.zeros(shape = (3, self.view_num))#array to record the center along u direction
+        for view_idx in range(self.view_num):
+            pmatrix_this_view = self.array_pmatrix[(view_idx*12):(view_idx+1)*12]#get the pmatrix for this view
+            pmatrix_this_view = np.reshape(pmatrix_this_view,[3,4])#reshape it to be 3x4 matrix
+            matrix_A = np.linalg.inv(pmatrix_this_view[:,0:3])#matrix A is the inverse of the 3x3 matrix from the first three columns
+            e_v_0 = matrix_A[:,1] #calculate the unit vector along detector vertical direction
+            e_u_0 = matrix_A[:,0] #calculate the unit vector along detector horizontal direction
+            pixel_size_ratio = (self.pmatrix_elem_width / np.linalg.norm(e_u_0) + self.pmatrix_elem_height / np.linalg.norm(e_u_0)) * 0.5
+            #confirm the pixel size from pmatrix is the same with the preset pmatrix pixel size;
+            pmatrix_this_view = pmatrix_this_view / pixel_size_ratio #if not, need to normalize the pmatrix
+            
+            matrix_A = np.linalg.inv(pmatrix_this_view[:,0:3]) #matrix A is the inverse of the 3x3 matrix from the first three columns
+            x_s = x_s_rec_final[:,view_idx:view_idx+1] #calculate the source position
+            if view_idx <= self.view_num - 2:
+                x_s_next_view =  x_s_rec_final[:,view_idx+1:view_idx+2]
+                delta_angle = math.atan2(x_s_next_view[1], x_s_next_view[0]) - math.atan2(x_s[1], x_s[0])
+                if abs(delta_angle) > PI:
+                    delta_angle = delta_angle - 2 * PI *np.sign(delta_angle)
+                total_scan_angle = total_scan_angle + delta_angle
+            e_v_0 = matrix_A[:,1] #calculate the unit vector along detector vertical direction
+            e_u_0 = matrix_A[:,0] #calculate the unit vector along detector horizontal direction
+            e_v = np.matmul(rotation_matrix_total, e_v_0) #change the unit vector along detector vertical direction
+            e_u = np.matmul(rotation_matrix_total, e_u_0) #change the unit vector along detector horizontal direction
+            x_do_x_s = np.matmul(rotation_matrix_total, matrix_A[:,2]) #change x_do - x_s
+            matrix_A[:,0] = e_u; matrix_A[:,1] = e_v; matrix_A[:,2] = x_do_x_s; #update the matrix A
+            matrix_A_inverse = np.linalg.inv(matrix_A) #recalculate the inverse of matrix A
+            pmatrix_this_view = np.append(matrix_A_inverse, -np.matmul(matrix_A_inverse,x_s), axis = 1)#get the new pmatrix for this view
+            u_center_rec[view_idx, 0]= pmatrix_this_view[0,3] / pmatrix_this_view[2,3]#get center of the pixel along u direction
+            v_center_rec[view_idx, 0]= pmatrix_this_view[1,3] / pmatrix_this_view[2,3]#get center of the pixel along v direction
+            x_d_center_x_s_rec_final[:,view_idx:view_idx+1] = x_do_x_s.reshape((3,1)) + \
+                u_center_rec[view_idx, 0] * e_u.reshape((3,1)) + v_center_rec[view_idx, 0] * e_v.reshape((3,1))
+            
+            pmatrix_this_view = np.reshape(pmatrix_this_view,[12,1])#reshape the matrix to be a vector
+            self.array_pmatrix[(view_idx*12):(view_idx+1)*12] = pmatrix_this_view[:,0] #update the pmatrix array
+        u_center_mean = np.mean(u_center_rec,axis = 0)#get mean value of center along u direction
+        v_center_mean = np.mean(v_center_rec,axis = 0)#get mean value of center along v direction
+        #update the parameters from the pmatrix
+        self.dect_offset_vertical = - ((self.dect_elem_count_vertical *self.dect_elem_height / self.pmatrix_elem_height - 1) / 2.0\
+                                       - np.squeeze(v_center_mean)) * self.pmatrix_elem_height
+        self.dect_offset_horizontal = ((self.dect_elem_count_horizontal *self.dect_elem_width / self.pmatrix_elem_width - 1) / 2.0\
+                                       - np.squeeze(u_center_mean)) * self.pmatrix_elem_width
+        self.source_isocenter_dis = np.sqrt( np.squeeze( np.mean( np.sum(np.multiply(x_s_rec_final,x_s_rec_final), axis = 0), axis = 0)))
+        self.source_dect_dis = np.sqrt( np.squeeze( np.mean( np.sum(np.multiply(x_d_center_x_s_rec_final[0:2,:],x_d_center_x_s_rec_final[0:2,:]), axis = 0), axis = 0)))
+        print('Parameters are updated from PMatrix:')
+        print('Mean Offset values are %.2f mm and %.2f mm for horizontal and vertical direction respectively;' \
+              %( self.dect_offset_horizontal, self.dect_offset_vertical))
+        print('Mean Source to Isocenter Distance is %.2f mm;' %(self.source_isocenter_dis))
+        print('Mean Source to Detector Distance is %.2f mm;' %(self.source_dect_dis))
+        if self.short_scan:
+            #update the total scan angle only when the scan is not 360 degree full scan
+            #for 360 degree scan, if total scan angle is updated (e.g. 359.5 degree)
+            #the div_factor calculation in back projection may have problem
+            self.total_scan_angle = total_scan_angle / (self.view_num - 1) * self.view_num
+            print('Total Scan Angle is %.2f degrees.'  %( self.total_scan_angle / PI * 180.0))
+        else:
+            print('Total Scan Angle is not updated for full scan.')
+            
+    def ChangePMatrix_PMatrixPixelSize(self):
+        ## Change the projection matrix values if the detector pixel size for pmatrix is different from the CT scan
+        ## The original pmatrix need to be modified
+        for view_idx in range(self.view_num):
+            pmatrix_this_view = self.array_pmatrix[(view_idx*12):(view_idx+1)*12]#get the pmatrix for this view
+            pmatrix_this_view = np.reshape(pmatrix_this_view,[3,4])#reshape it to be 3x4 matrix
+            matrix_A = np.linalg.inv(pmatrix_this_view[:,0:3])#matrix A is the inverse of the 3x3 matrix from the first three columns
+            x_s = - np.matmul(matrix_A,pmatrix_this_view[:,3]).reshape([3,1])#calculate the source position
+            e_v_0 = matrix_A[:,1] #calculate the unit vector along detector vertical direction
+            e_u_0 = matrix_A[:,0] #calculate the unit vector along detector horizontal direction
+            e_v = e_v_0 * self.dect_elem_height / self.pmatrix_elem_height #change the unit vector along detector vertical direction
+            e_u = e_u_0 * self.dect_elem_width / self.pmatrix_elem_width #change the unit vector along detector horizontal direction
+            x_do_x_s = matrix_A[:,2] + np.multiply(0.5, e_v - e_v_0) + np.multiply(0.5, e_u - e_v_0)#change x_do - x_s
+            matrix_A[:,0] = e_u; matrix_A[:,1] = e_v; matrix_A[:,2] = x_do_x_s; #update the matrix A
+            matrix_A_inverse = np.linalg.inv(matrix_A) #recalculate the inverse of matrix A
+            pmatrix_this_view = np.append(matrix_A_inverse, -np.matmul(matrix_A_inverse,x_s), axis = 1)#get the new pmatrix for this view
+            pmatrix_this_view = np.reshape(pmatrix_this_view,[12,1])#reshape the matrix to be a vector
+            self.array_pmatrix[(view_idx*12):(view_idx+1)*12] = pmatrix_this_view[:,0] #update the pmatrix array
+            
+    def ChangePMatrix_VerticalReconRange(self):
+        ## Change the projection matrix values if vertical recon range is applied
+        ## The original pmatrix need to be modified
+        for view_idx in range(self.view_num):
+            pmatrix_this_view = self.array_pmatrix[(view_idx*12):(view_idx+1)*12]#get the pmatrix for this view
+            pmatrix_this_view = np.reshape(pmatrix_this_view,[3,4])#reshape it to be 3x4 matrix
+            matrix_A = np.linalg.inv(pmatrix_this_view[:,0:3])#matrix A is the inverse of the 3x3 matrix from the first three columns
+            x_s = - np.matmul(matrix_A,pmatrix_this_view[:,3]).reshape([3,1])#calculate the source position
+            e_v = matrix_A[:,1]#calculate the unit vector along detector vertical direction
+            matrix_A[:,2] = matrix_A[:,2] + np.multiply(self.dect_elem_vertical_recon_range_begin, e_v)
+            #calculate the new x_do - x_s
+            
+            matrix_A_inverse = np.linalg.inv(matrix_A) #recalculate the inverse of matrix A
+            pmatrix_this_view = np.append(matrix_A_inverse, -np.matmul(matrix_A_inverse,x_s), axis = 1)#get the new pmatrix for this view
+            pmatrix_this_view = np.reshape(pmatrix_this_view,[12,1])#reshape the matrix to be a vector
+            self.array_pmatrix[(view_idx*12):(view_idx+1)*12] = pmatrix_this_view[:,0] #update the pmatrix array
         
         
     @ti.kernel

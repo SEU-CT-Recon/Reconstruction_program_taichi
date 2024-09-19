@@ -41,3 +41,19 @@ The original pmatrix need to be modified.
 
 Add option to save the modified config file: 
 "SaveModifiedConfigName": "config_1.jsonc"
+
+24-09-19
+Previous version has some bugs. Now they are fixed:
+self.dect_offset_vertical = - ((self.dect_elem_count_vertical *self.dect_elem_height / self.pmatrix_elem_height - 1) / 2.0\
+                                       - np.squeeze(v_center_mean)) * self.pmatrix_elem_height
+self.dect_offset_horizontal = ((self.dect_elem_count_horizontal *self.dect_elem_width / self.pmatrix_elem_width - 1) / 2.0\
+                                       - np.squeeze(u_center_mean)) * self.pmatrix_elem_width
+
+if self.short_scan:
+            #update the total scan angle only when the scan is not 360 degree full scan
+            #for 360 degree scan, if total scan angle is updated (e.g. 359.5 degree)
+            #the div_factor calculation in back projection may have problem
+            self.total_scan_angle = total_scan_angle / (self.view_num - 1) * self.view_num
+            print('Total Scan Angle is %.2f degrees.'  %( self.total_scan_angle / PI * 180.0))
+        else:
+            print('Total Scan Angle is not updated for full scan.')
