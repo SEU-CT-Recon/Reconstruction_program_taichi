@@ -606,6 +606,8 @@ class Mgfbp:
             self.img_dim_z = self.dect_elem_count_vertical
             self.img_voxel_height = 0.0
             self.img_center_z = 0
+            self.bool_apply_pmatrix = False
+            self.array_pmatrix_taichi = ti.field(dtype=ti.f32, shape=self.view_num * 12)
         
             
         self.img_recon = np.zeros((self.img_dim_z,self.img_dim,self.img_dim),dtype = np.float32)
