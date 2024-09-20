@@ -633,14 +633,35 @@ class Mgfbp:
         #存储数组u
         self.array_v_taichi = ti.field(dtype = ti.f32,shape = self.dect_elem_count_vertical_actual)
         
-        if 'SaveModifiedConfigName' in config_dict:
-            if isinstance(config_dict['SaveModifiedConfigName'], str):
-                save_config_file_name = config_dict['SaveModifiedConfigName']
-                del config_dict['SaveModifiedConfigName']
-                save_jsonc(save_config_file_name, config_dict)
-                print('Modified config file is saved to %s.' %(save_config_file_name))
+        #save the parameters from pmatrix
+        if 'SaveModifiedConfigFolder' in config_dict:
+            if isinstance(config_dict['SaveModifiedConfigFolder'], str):
+                save_config_folder_name = config_dict['SaveModifiedConfigFolder']
+                del config_dict['SaveModifiedConfigFolder']
+                if not os.path.exists(save_config_folder_name):
+                    os.makedirs(save_config_folder_name)
+                save_jsonc(save_config_folder_name + "/config_mgfbp.jsonc", config_dict)
+                print('Modified config files are saved to %s folder.' %(save_config_folder_name))
+                config_pmatrix = {}
+                config_pmatrix['Value'] = self.array_pmatrix.tolist()
+                save_jsonc(save_config_folder_name + "/pmatrix_file.jsonc", config_pmatrix)
+                config_sid = {}
+                config_sid['Value'] = self.source_isocenter_dis_each_view.tolist()
+                save_jsonc(save_config_folder_name + "/sid_file.jsonc", config_sid)
+                config_sdd = {}
+                config_sdd['Value'] = self.source_dect_dis_each_view.tolist()
+                save_jsonc(save_config_folder_name + "/sdd_file.jsonc", config_sdd)
+                config_dect_offset_horizontal = {}
+                config_dect_offset_horizontal['Value'] = np.squeeze(self.dect_offset_horizontal_each_view).tolist()
+                save_jsonc(save_config_folder_name + "/dect_offset_horizontal_file.jsonc", config_dect_offset_horizontal)
+                config_dect_offset_vertical = {}
+                config_dect_offset_vertical['Value'] = np.squeeze(self.dect_offset_vertical_each_view).tolist()
+                save_jsonc(save_config_folder_name + "/dect_offset_vertical_file.jsonc", config_dect_offset_vertical)
+                config_scan_angle = {}
+                config_scan_angle['Value'] = np.squeeze(self.scan_angle_each_view).tolist()
+                save_jsonc(save_config_folder_name + "/scan_angle_file.jsonc", config_scan_angle)
             else:
-                print('ERROR: SaveModifiedConfigName must be a string!')
+                print('ERROR: SaveModifiedConfigFolder must be a string!')
                 sys.exit()
             
     def ChangePMatrix_SourceTrajectory(self):
@@ -685,7 +706,8 @@ class Mgfbp:
         
         v_center_rec = np.zeros(shape = (self.view_num,1))#array to record the center along v direction
         u_center_rec = np.zeros(shape = (self.view_num,1))#array to record the center along u direction
-        total_scan_angle = 0.0
+        scan_angle_summation = 0.0
+        self.scan_angle_each_view = np.zeros(shape = (self.view_num,1))
         x_d_center_x_s_rec_final = np.zeros(shape = (3, self.view_num))#array to record the center along u direction
         for view_idx in range(self.view_num):
             pmatrix_this_view = self.array_pmatrix[(view_idx*12):(view_idx+1)*12]#get the pmatrix for this view
@@ -704,7 +726,8 @@ class Mgfbp:
                 delta_angle = math.atan2(x_s_next_view[1], x_s_next_view[0]) - math.atan2(x_s[1], x_s[0])
                 if abs(delta_angle) > PI:
                     delta_angle = delta_angle - 2 * PI *np.sign(delta_angle)
-                total_scan_angle = total_scan_angle + delta_angle
+                scan_angle_summation = scan_angle_summation + delta_angle
+                self.scan_angle_each_view[view_idx+1,0] = scan_angle_summation / PI * 180.0
             e_v_0 = matrix_A[:,1] #calculate the unit vector along detector vertical direction
             e_u_0 = matrix_A[:,0] #calculate the unit vector along detector horizontal direction
             e_v = np.matmul(rotation_matrix_total, e_v_0) #change the unit vector along detector vertical direction
@@ -720,15 +743,18 @@ class Mgfbp:
             
             pmatrix_this_view = np.reshape(pmatrix_this_view,[12,1])#reshape the matrix to be a vector
             self.array_pmatrix[(view_idx*12):(view_idx+1)*12] = pmatrix_this_view[:,0] #update the pmatrix array
-        u_center_mean = np.mean(u_center_rec,axis = 0)#get mean value of center along u direction
-        v_center_mean = np.mean(v_center_rec,axis = 0)#get mean value of center along v direction
+        #get offset value for each view
+        self.dect_offset_vertical_each_view = - ((self.dect_elem_count_vertical *self.dect_elem_height / self.pmatrix_elem_height - 1) / 2.0\
+                                       - v_center_rec) * self.pmatrix_elem_height
+        self.dect_offset_horizontal_each_view = ((self.dect_elem_count_horizontal *self.dect_elem_width/ self.pmatrix_elem_width - 1) / 2.0\
+                                       - u_center_rec) * self.pmatrix_elem_width
         #update the parameters from the pmatrix
-        self.dect_offset_vertical = - ((self.dect_elem_count_vertical *self.dect_elem_height / self.pmatrix_elem_height - 1) / 2.0\
-                                       - np.squeeze(v_center_mean)) * self.pmatrix_elem_height
-        self.dect_offset_horizontal = ((self.dect_elem_count_horizontal *self.dect_elem_width / self.pmatrix_elem_width - 1) / 2.0\
-                                       - np.squeeze(u_center_mean)) * self.pmatrix_elem_width
-        self.source_isocenter_dis = np.sqrt( np.squeeze( np.mean( np.sum(np.multiply(x_s_rec_final,x_s_rec_final), axis = 0), axis = 0)))
-        self.source_dect_dis = np.sqrt( np.squeeze( np.mean( np.sum(np.multiply(x_d_center_x_s_rec_final[0:2,:],x_d_center_x_s_rec_final[0:2,:]), axis = 0), axis = 0)))
+        self.dect_offset_vertical = np.squeeze(np.mean(self.dect_offset_vertical_each_view,axis = 0)).tolist()#calculate the mean offset
+        self.dect_offset_horizontal = np.squeeze(np.mean(self.dect_offset_horizontal_each_view,axis = 0)).tolist()#calculate the mean offset
+        self.source_isocenter_dis_each_view = np.sqrt(np.sum(np.multiply(x_s_rec_final,x_s_rec_final), axis = 0))
+        self.source_dect_dis_each_view = np.sqrt(np.sum(np.multiply(x_d_center_x_s_rec_final,x_d_center_x_s_rec_final), axis = 0))
+        self.source_isocenter_dis =  np.squeeze( np.mean(self.source_isocenter_dis_each_view, axis = 0)).tolist()
+        self.source_dect_dis =  np.squeeze( np.mean( self.source_dect_dis_each_view, axis = 0)).tolist()
         print('Parameters are updated from PMatrix:')
         print('Mean Offset values are %.2f mm and %.2f mm for horizontal and vertical direction respectively;' \
               %( self.dect_offset_horizontal, self.dect_offset_vertical))
@@ -738,7 +764,7 @@ class Mgfbp:
             #update the total scan angle only when the scan is not 360 degree full scan
             #for 360 degree scan, if total scan angle is updated (e.g. 359.5 degree)
             #the div_factor calculation in back projection may have problem
-            self.total_scan_angle = total_scan_angle / (self.view_num - 1) * self.view_num
+            self.total_scan_angle = scan_angle_summation / (self.view_num - 1) * self.view_num
             print('Total Scan Angle is %.2f degrees.'  %( self.total_scan_angle / PI * 180.0))
         else:
             print('Total Scan Angle is not updated for full scan.')

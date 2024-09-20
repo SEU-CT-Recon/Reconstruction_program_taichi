@@ -57,3 +57,7 @@ if self.short_scan:
             print('Total Scan Angle is %.2f degrees.'  %( self.total_scan_angle / PI * 180.0))
         else:
             print('Total Scan Angle is not updated for full scan.')
+
+24-09-20
+add "SaveModifiedConfigFolder" option
+parameters from the pmatrix will be saved to this folder
