@@ -27,15 +27,17 @@ def run_mgfbp(file_path):
         print(f"ERROR: Config File {file_path} does not exist!")
         #Judge whether the config jsonc file exist
         sys.exit()
-    config_dict = ReadConfigFile(file_path)#读入jsonc文件并以字典的形式存储在config_dict
-    fbp = Mgfbp(config_dict) #将config_dict数据以字典的形式送入对象
+    config_dict = ReadConfigFile(file_path)#读入jsonc文件并以字典的形式存储在config_dict�?
+    fbp = Mgfbp(config_dict) #将config_dict数据以字典的形式送入对象�?
     # Ensure output directory exists; if not, create the directory
+    if not os.path.exists(fbp.output_dir):
+        os.makedirs(fbp.output_dir)
     img_recon = fbp.MainFunction()#recontructed image is returned by fbp.MainFunction()
     end_time = time.time()# record end time point
     execution_time = end_time - start_time# 计算执行时间
     if fbp.file_processed_count > 0:
         print(f"\nA total of {fbp.file_processed_count:d} file(s) are reconstructed!")
-        print(f"Time cost is {execution_time:.3} sec\n")# 打印执行时间（以秒为单位
+        print(f"Time cost：{execution_time:.3} sec\n")# 打印执行时间（以秒为单位�?
     else:
         print(f"\nWarning: Did not find files like {fbp.input_files_pattern:s} in {fbp.input_dir:s}.")
         print("No images are reconstructed!\n")
@@ -80,7 +82,7 @@ class Mgfbp:
     
                     print('Saving to %s !' % self.output_path)
                     self.SaveReconImg()
-        return self.img_recon #函数返回重建
+        return self.img_recon #函数返回重建�?
     
     def __init__(self,config_dict):
         self.config_dict = config_dict
@@ -104,9 +106,6 @@ class Mgfbp:
         else:
             print("ERROR: Can not find OutputDir in the config file!")
             sys.exit()
-        
-        if not os.path.exists(self.output_dir):
-            os.makedirs(self.output_dir)
             
         if 'InputFiles' in config_dict:
             if type(config_dict['InputFiles']) == str:
@@ -438,8 +437,6 @@ class Mgfbp:
             self.array_kernel_ramp_taichi = ti.field(dtype=ti.f32, shape=2*self.dect_elem_count_horizontal-1)
             self.array_kernel_gauss_taichi = ti.field(dtype=ti.f32, shape=2*self.dect_elem_count_horizontal-1)
             #当进行高斯核运算的时候需要两个额外的数组存储相关数据
-        else:
-            self.kernel_param = 0.0 #kernel is not defined
         if not isinstance(self.kernel_param,float) and not isinstance(self.kernel_param,int):
             print("ERROR: Kernel parameter must be a number!")
             sys.exit()
@@ -465,7 +462,7 @@ class Mgfbp:
             self.cone_beam = False
         
         if self.cone_beam:
-            print("--Cone beam")
+            print("--Cone beam recon")
             
             #detector element height
             if 'SliceThickness' in config_dict:
@@ -524,13 +521,13 @@ class Mgfbp:
                         sys.exit()
                     self.array_pmatrix = np.array(self.array_pmatrix,dtype = np.float32)
                     self.array_pmatrix_taichi.from_numpy(self.array_pmatrix)
-                    self.bool_apply_pmatrix = 1
+                    self.bool_apply_pmatrix = True
                     print("--PMatrix applied")
                 else:
                     print("ERROR: PMatrixFile has no member named 'Value'!")
                     sys.exit()
             else:
-                self.bool_apply_pmatrix = 0
+                self.bool_apply_pmatrix = False
             
             if self.bool_apply_pmatrix:
                 ## Change the projection matrix Values if a different detector binning is applied for obj CT scan
@@ -587,7 +584,6 @@ class Mgfbp:
             #img center along z direction
             if 'ImageCenterZ' in config_dict:
                 self.img_center_z = config_dict['ImageCenterZ']
-                self.img_center_z_auto_set_from_fbp = False
                 if not isinstance(self.img_center_z,float) and not isinstance(self.img_center_z,int):
                     print('ERROR: ImageCenterZ must be a number!')
                     sys.exit()
@@ -600,18 +596,16 @@ class Mgfbp:
                     distance_to_original_detector_center_row = distance_to_original_detector_center_row * (-1)
                 self.img_center_z = (self.dect_offset_vertical + distance_to_original_detector_center_row)\
                     * self.source_isocenter_dis / self.source_dect_dis
-                print("Warning: Did not find image center along z direction! ")
-                print("Use default setting (central slice of the given detector recon row range)")
-                print("Image center at Z direction is %.4f mm (from run_mgfbp). " %self.img_center_z)
-                self.img_center_z_auto_set_from_fbp = True
+                print("Warning: Did not find image center along z direction! Use default setting (central slice of the given detector recon row range)")
+                print("Image center at Z direction is %.4f mm. " %self.img_center_z)
                 config_dict['ImageCenterZ'] = self.img_center_z
         else:
-            print("--Fan beam")
+            print("--Fan beam recon")
             self.dect_elem_height = 0.0
             self.dect_offset_vertical = 0.0
             self.img_dim_z = self.dect_elem_count_vertical
             self.img_voxel_height = 0.0
-            self.img_center_z = 0.0
+            self.img_center_z = 0
             self.bool_apply_pmatrix = False
             self.array_pmatrix_taichi = ti.field(dtype=ti.f32, shape=self.view_num * 12)
         
@@ -620,7 +614,7 @@ class Mgfbp:
         self.img_sgm = np.zeros((self.dect_elem_count_vertical_actual, self.view_num, self.dect_elem_count_horizontal),dtype = np.float32)
               
         ######### initialize taichi components ########
-        #img_sgm_filtered_taichi存储卷积后的正弦
+        #img_sgm_filtered_taichi存储卷积后的正弦�?
         self.img_sgm_filtered_taichi = ti.field(dtype=ti.f32, shape=(self.dect_elem_count_vertical_actual,self.view_num, self.dect_elem_count_horizontal))
         #img_sgm_filtered_taichi 纵向卷积后正弦图的中间结果，then apply horizontal convolution
         
@@ -650,25 +644,24 @@ class Mgfbp:
                     os.makedirs(save_config_folder_name)
                 save_jsonc(save_config_folder_name + "/config_mgfbp.jsonc", config_dict)
                 print('Modified config files are saved to %s folder.' %(save_config_folder_name))
-                if self.bool_apply_pmatrix:
-                    config_pmatrix = {}
-                    config_pmatrix['Value'] = self.array_pmatrix.tolist()
-                    save_jsonc(save_config_folder_name + "/pmatrix_file.jsonc", config_pmatrix)
-                    config_sid = {}
-                    config_sid['Value'] = self.source_isocenter_dis_each_view.tolist()
-                    save_jsonc(save_config_folder_name + "/sid_file.jsonc", config_sid)
-                    config_sdd = {}
-                    config_sdd['Value'] = self.source_dect_dis_each_view.tolist()
-                    save_jsonc(save_config_folder_name + "/sdd_file.jsonc", config_sdd)
-                    config_dect_offset_horizontal = {}
-                    config_dect_offset_horizontal['Value'] = np.squeeze(self.dect_offset_horizontal_each_view).tolist()
-                    save_jsonc(save_config_folder_name + "/dect_offset_horizontal_file.jsonc", config_dect_offset_horizontal)
-                    config_dect_offset_vertical = {}
-                    config_dect_offset_vertical['Value'] = np.squeeze(self.dect_offset_vertical_each_view).tolist()
-                    save_jsonc(save_config_folder_name + "/dect_offset_vertical_file.jsonc", config_dect_offset_vertical)
-                    config_scan_angle = {}
-                    config_scan_angle['Value'] = np.squeeze(self.scan_angle_each_view).tolist()
-                    save_jsonc(save_config_folder_name + "/scan_angle_file.jsonc", config_scan_angle)
+                config_pmatrix = {}
+                config_pmatrix['Value'] = self.array_pmatrix.tolist()
+                save_jsonc(save_config_folder_name + "/pmatrix_file.jsonc", config_pmatrix)
+                config_sid = {}
+                config_sid['Value'] = self.source_isocenter_dis_each_view.tolist()
+                save_jsonc(save_config_folder_name + "/sid_file.jsonc", config_sid)
+                config_sdd = {}
+                config_sdd['Value'] = self.source_dect_dis_each_view.tolist()
+                save_jsonc(save_config_folder_name + "/sdd_file.jsonc", config_sdd)
+                config_dect_offset_horizontal = {}
+                config_dect_offset_horizontal['Value'] = np.squeeze(self.dect_offset_horizontal_each_view).tolist()
+                save_jsonc(save_config_folder_name + "/dect_offset_horizontal_file.jsonc", config_dect_offset_horizontal)
+                config_dect_offset_vertical = {}
+                config_dect_offset_vertical['Value'] = np.squeeze(self.dect_offset_vertical_each_view).tolist()
+                save_jsonc(save_config_folder_name + "/dect_offset_vertical_file.jsonc", config_dect_offset_vertical)
+                config_scan_angle = {}
+                config_scan_angle['Value'] = np.squeeze(self.scan_angle_each_view).tolist()
+                save_jsonc(save_config_folder_name + "/scan_angle_file.jsonc", config_scan_angle)
             else:
                 print('ERROR: SaveModifiedConfigFolder must be a string!')
                 sys.exit()
@@ -824,7 +817,7 @@ class Mgfbp:
         t = kernel_param
         for i in ti.ndrange(2 * dect_elem_count_horizontal - 1):  
             n = i - bias
-            #part 1 ramp
+            #part 1 ramp�?
             if n == 0:
                 array_recon_kernel_taichi[i] = t / (4 * dect_elem_width * dect_elem_width)
             elif n % 2 == 0:
@@ -837,13 +830,13 @@ class Mgfbp:
                     #this function leads to 1% bias in calculation
                 else:
                     array_recon_kernel_taichi[i] = -t / (PI * PI * (float(n) **2) * (dect_elem_width **2))
-            #part 2 cosine
+            #part 2 cosine�?
             sgn = 1 if n % 2 == 0 else -1
             array_recon_kernel_taichi[i] += (1-t)*(sgn/(2 * PI * dect_elem_width * dect_elem_width)*(1/(1 + 2 * n)+ 1 / (1 - 2 * n))- 1 / (PI * PI * dect_elem_width * dect_elem_width) * (1 / (1 + 2 * n) / (1 + 2 * n) + 1 / (1 - 2 * n) / (1 - 2 * n)))
 
     @ti.kernel
     def GenerateGassianKernel(self,dect_elem_count_horizontal:ti.i32,dect_elem_width:ti.f32,kernel_param:ti.f32,array_kernel_gauss_taichi:ti.template()):
-        #计算高斯
+        #计算高斯�?
         temp_sum = 0.0
         delta = kernel_param
         for i in ti.ndrange(2 * dect_elem_count_horizontal - 1):
@@ -864,7 +857,7 @@ class Mgfbp:
     @ti.kernel
     def GenerateDectPixPosArray(self,dect_elem_count_horizontal:ti.i32,dect_elem_count_horizontal_actual:ti.i32,dect_elem_width:ti.f32,\
                                 dect_offset_horizontal:ti.f32,array_u_taichi:ti.template(),dect_elem_begin_idx:ti.i32, first_slice_top_row:ti.i32):
-        #计算u数组，并加入偏移方便后续做处
+        #计算u数组，并加入偏移方便后续做处�?
         flag = 0
         if first_slice_top_row:
             flag = -1 # if first sinogram is the top detector row, it corresponds to a positive v value
@@ -934,12 +927,12 @@ class Mgfbp:
                             weighting = ti.sin(PI / 2 * beta / (gamma_max - 2 * gamma))
                             weighting = weighting * weighting
                         elif (gamma_max - 2 * gamma) <= beta < (PI * (2 * num_rounds + 1) - 2 * gamma):
-                            weighting = 1.0
+                            weighting = 1
                         elif (PI * (2 * num_rounds + 1) - 2 * gamma) <= beta <= (PI * (2 * num_rounds + 1) + gamma_max):
                             weighting = ti.sin(PI / 2 * (PI + gamma_max - (beta - PI * 2 * num_rounds)) / (gamma_max + 2 * gamma))
                             weighting = weighting * weighting
                     else:
-                        weighting = 1.0
+                        weighting = 1    
                     img_sgm_taichi[s,i,j] *= weighting
                 
     @ti.kernel
@@ -1053,7 +1046,7 @@ class Mgfbp:
                     angle_this_view_exclude_img_rot = array_angle_taichi[j] - img_rot
                     
                     pix_to_source_parallel_dis = source_isocenter_dis - x * ti.cos(angle_this_view_exclude_img_rot) - y * ti.sin(angle_this_view_exclude_img_rot)
-                    if bool_apply_pmatrix == 0:
+                    if self.bool_apply_pmatrix == 0:
                         mag_factor = source_dect_dis / pix_to_source_parallel_dis
                         if curved_dect:
                             pix_proj_to_dect_u = source_dect_dis * ti.atan2(x*ti.sin(angle_this_view_exclude_img_rot)-y*ti.cos(angle_this_view_exclude_img_rot),pix_to_source_parallel_dis)
@@ -1085,7 +1078,7 @@ class Mgfbp:
                         distance_weight = 1.0 / (pix_to_source_parallel_dis * pix_to_source_parallel_dis)
 
                     if cone_beam == True:
-                        if bool_apply_pmatrix == 0:
+                        if self.bool_apply_pmatrix == 0:
                             pix_proj_to_dect_v = mag_factor * z
                             pix_proj_to_dect_v_idx = (pix_proj_to_dect_v - array_v_taichi[0]) / dect_elem_height \
                                 * abs(array_v_taichi[1] - array_v_taichi[0]) / (array_v_taichi[1] - array_v_taichi[0])
@@ -1127,7 +1120,7 @@ class Mgfbp:
                 #to save to tif, '*.raw' need to be changed to '*.tif'
                 self.output_file = re.sub('.raw', '.tif', self.output_file)
             self.output_path = os.path.join(self.output_dir, self.output_file_prefix + self.output_file)
-            #对一些文件命名的处理都遵循的过去程序的命名规
+            #对一些文件命名的处理都遵循的过去程序的命名规�?
             if self.input_file_form == 'sinogram':
                 file_offset = self.dect_elem_vertical_recon_range_begin * 4 * self.sgm_height * self.dect_elem_count_horizontal
                 # '4' is size of a float numer in bytes
@@ -1165,25 +1158,28 @@ class Mgfbp:
             self.GenerateDectPixPosArray(self.dect_elem_count_vertical,self.dect_elem_count_vertical_actual,\
                                          0,0,self.array_v_taichi,0,False)
         #计算angle数组    
-        self.GenerateAngleArray(self.view_num,self.img_rot,self.total_scan_angle,self.array_angle_taichi) 
-        #img_rot is added to array_angle_taichi 
+        self.GenerateAngleArray(self.view_num,self.img_rot,self.total_scan_angle,self.array_angle_taichi) #img_rot is not added to array_angle_taichi 
+        #this is for pmatrix calculation
+        
+        #img_rot is not incorporated here;
+        #image rotation is only performed in the backprojection process
     
     def InitializeReconKernel(self):
         if 'HammingFilter' in self.config_dict:
             self.GenerateHammingKernel(self.dect_elem_count_horizontal,self.dect_elem_width,\
                                        self.kernel_param,self.source_dect_dis,self.array_recon_kernel_taichi,self.curved_dect)
-            #计算hamming核存储在array_recon_kernel_taichi
+            #计算hamming核存储在array_recon_kernel_taichi�?
             
         elif 'GaussianApodizedRamp' in self.config_dict:
             self.GenerateGassianKernel(self.dect_elem_count_horizontal,self.dect_elem_width,\
                                        self.kernel_param,self.array_kernel_gauss_taichi)
-            #计算高斯核存储在array_kernel_gauss_taichi
+            #计算高斯核存储在array_kernel_gauss_taichi�?
             self.GenerateHammingKernel(self.dect_elem_count_horizontal,self.dect_elem_width,1,\
                                        self.source_dect_dis,self.array_kernel_ramp_taichi,self.curved_dect)
-            #1.以hamming参数1调用一次hamming核处理运算结果存储在array_kernel_ramp_taichi
+            #1.以hamming参数�?1调用一次hamming核处理运算结果存储在array_kernel_ramp_taichi
             self.ConvolveKernelAndKernel(self.dect_elem_count_horizontal,self.dect_elem_width,\
                                          self.array_kernel_ramp_taichi,self.array_kernel_gauss_taichi,self.array_recon_kernel_taichi)
-            #2.将计算出来的高斯核array_kernel_gauss_taichi与以hamming参数1计算出来的hamming核array_kernel_ramp_taichi进行一次运算得到新的高斯核存储在array_recon_kernel_taichi
+            #2.将计算出来的高斯核array_kernel_gauss_taichi与以hamming参数�?1计算出来的hamming核array_kernel_ramp_taichi进行一次运算得到新的高斯核存储在array_recon_kernel_taichi�?
         
         self.GenerateGassianKernel(self.dect_elem_count_vertical_actual,self.dect_elem_height,\
                                        self.dect_elem_vertical_gauss_filter_size,self.array_kernel_gauss_vertical_taichi)
@@ -1216,7 +1212,7 @@ class Mgfbp:
     
     
 def remove_comments(jsonc_str):
-    # 使用正则表达式去除注
+    # 使用正则表达式去除注�?
     pattern = re.compile(r'//.*?$|/\*.*?\*/', re.MULTILINE | re.DOTALL)
     return re.sub(pattern, '', jsonc_str)
 
@@ -1226,7 +1222,7 @@ def save_jsonc(save_path,data):
         json.dump(data,file)
 
 def load_jsonc(file_path):
-    #读取jsonc文件并以字典的形式返回所有数
+    #读取jsonc文件并以字典的形式返回所有数�?
     with open(file_path, 'r') as file:
         jsonc_content = file.read()
         json_content = remove_comments(jsonc_content)
@@ -1249,7 +1245,7 @@ def imreadRaw(path: str, height: int, width: int, dtype = np.float32, nSlice: in
 def ReadConfigFile(file_path):
     # 替换为你的JSONC文件路径
     json_data = load_jsonc(file_path)
-    # 现在，json_data包含了从JSONC文件中解析出的数
+    # 现在，json_data包含了从JSONC文件中解析出的数�?
     # print(json_data)
     return json_data
 

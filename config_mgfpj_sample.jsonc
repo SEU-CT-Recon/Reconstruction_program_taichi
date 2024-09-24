@@ -52,7 +52,7 @@
 
 
   // start angle (positive counterclockwise) [degree]
-  "StartAngle": 0,
+  "ImageRotation": 0,
   // number of detector elements
   "DetectorElementCountHorizontal": 384,
   // number of views for reconstruction

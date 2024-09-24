@@ -61,3 +61,12 @@ if self.short_scan:
 24-09-20
 add "SaveModifiedConfigFolder" option
 parameters from the pmatrix will be saved to this folder
+
+24-09-23
+Add new "run_mgfpj_ver2" code
+This file can process forward projection with pmarix. 
+The code is more concise as the parameters are inherited from run_mgfbp
+however, the code is not fully compatible with mgfpj.exe
+
+24-09-24
+fix bugs related to mgfbp_helical

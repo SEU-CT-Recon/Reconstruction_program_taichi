@@ -1,9 +1,20 @@
 # -*- coding: utf-8 -*-
 """
+Created on Fri Sep 20 20:06:44 2024
+
+@author: xji
+"""
+
+# -*- coding: utf-8 -*-
+"""
 Created on Fri Apr 12 10:06:09 2024
 
 @author: xji
 """
+#this new version of mgfpj inherits from mgfbp
+#add pmatrix forward projection option
+#may not be compatible with mgfpj.exe
+#some parameter alias are not incorporated (e.g., DetectorZElementCount, DetectorZOffcenter)
 
 import warnings
 import time
@@ -17,14 +28,17 @@ import gc
 from crip.io import imwriteRaw
 from crip.io import imwriteTiff
 import time
-
+from run_mgfbp import *
 PI = 3.1415926536
 
 
 def run_mgfpj(file_path):
     ti.reset()
     ti.init(arch=ti.gpu)
-    print('Performing FPJ from MandoCT-Taichi (ver 0.11) ...')
+    print('Performing FPJ from MandoCT-Taichi (ver 0.2) ...')
+    print('This new version of run_mgfpj inherits from run_mgfbp.' )
+    print('Add PMatrix forward projection option.' )
+    print('Is not fully compatible with mgfpj.exe. ')
     # record start time point
     start_time = time.time()
     # Delete unnecessary warinings
@@ -34,31 +48,31 @@ def run_mgfpj(file_path):
         print(f"ERROR: Config File {file_path} does not exist!")
         # Judge whether the config jsonc file exist
         sys.exit()
-    config_dict = ReadConfigFile(file_path)  # 读入jsonc文件并以字典的形式存储在config_dict中
-    fpj = Mgfpj(config_dict)  # 将config_dict数据以字典的形式送入对象中
+    config_dict = ReadConfigFile(file_path)
+    fpj = Mgfpj(config_dict)
     img_sgm = fpj.MainFunction()
     end_time = time.time()
-    execution_time = end_time - start_time  # 计算执行时间
+    execution_time = end_time - start_time  
     if fpj.file_processed_count > 0:
         print(
             f"\nA total of {fpj.file_processed_count:d} files are forward projected!")
-        print(f"Time cost：{execution_time:.3} sec\n")  # 打印执行时间（以秒为单位）
+        print(f"Time cost is {execution_time:.3} sec\n")
     else:
         print(
             f"\nWarning: Did not find files like {fpj.input_files_pattern:s} in {fpj.input_dir:s}.")
         print("No images are  forward projected!\n")
-    gc.collect()  #手动触发垃圾回收
-    ti.reset()  #free gpu ram
+    gc.collect()  # 
+    ti.reset()  # free gpu ram
     return img_sgm
 
 
 @ti.data_oriented
-class Mgfpj:
+class Mgfpj(Mgfbp):
     def MainFunction(self):
 
         self.file_processed_count = 0
         self.GenerateAngleArray(
-            self.view_num, self.start_angle, self.scan_angle, self.array_angle_taichi)
+            self.view_num, self.img_rot, self.total_scan_angle, self.array_angle_taichi)
         self.GenerateDectPixPosArray(
             self.dect_elem_count_vertical, - self.dect_elem_height, self.dect_offset_vertical, self.array_v_taichi)
         self.GenerateDectPixPosArray(self.dect_elem_count_horizontal*self.oversample_size, self.dect_elem_width/self.oversample_size,
@@ -80,7 +94,8 @@ class Mgfpj:
                                                        self.dect_elem_count_vertical, self.view_num, self.img_pix_size, self.img_voxel_height,
                                                        self.source_isocenter_dis, self.source_dect_dis, self.cone_beam,
                                                        self.helical_scan, self.helical_pitch, v_idx, self.fpj_step_size,
-                                                       self.img_center_x, self.img_center_y, self.img_center_z, self.curved_dect)
+                                                       self.img_center_x, self.img_center_y, self.img_center_z, self.curved_dect,\
+                                                       self.matrix_A_each_view_taichi,self.x_s_each_view_taichi,self.bool_apply_pmatrix)
 
                         self.BinSinogram(self.img_sgm_large_taichi, self.img_sgm_taichi,
                                          self.dect_elem_count_horizontal, self.view_num, self.oversample_size)
@@ -96,50 +111,9 @@ class Mgfpj:
         return self.img_sgm
 
     def __init__(self, config_dict):
+        super(Mgfpj,self).__init__(config_dict)
         self.config_dict = config_dict
         ######## parameters related to input and output filenames ########
-        if 'InputDir' in config_dict:
-            self.input_dir = config_dict['InputDir']
-            if not isinstance(self.input_dir,str):
-                print('ERROR: InputDir must be a string!')
-                sys.exit()
-        else:
-            print('ERROR: Can not find InputDir!')
-            sys.exit()
-            
-        if 'OutputDir' in config_dict:
-            self.output_dir = config_dict['OutputDir']
-            if not isinstance(self.output_dir,str):
-                print('ERROR: OutputDir must be a string!')
-                sys.exit()
-        else:
-            print('ERROR: Can not find OutputDir!')
-            sys.exit()
-        
-        if 'InputFiles' in config_dict:
-            self.input_files_pattern = config_dict['InputFiles']
-            if not isinstance(self.input_files_pattern,str):
-                print('ERROR: InputFiles must be a string!')
-                sys.exit()
-        else:
-            print('ERROR: Can not find InputFiles!')
-            sys.exit()
-        
-        if 'OutputFilePrefix' in config_dict:
-            self.output_file_prefix = config_dict['OutputFilePrefix']
-            if not isinstance(self.output_file_prefix,str):
-                print('ERROR: OutputFilePrefix must be a string!')
-                sys.exit()
-        else:
-            print('Warning: Can not find OutputFilePrefix! Set to be an empty string. ')
-            self.output_file_prefix = ""
-        
-        if 'OutputFileReplace' in config_dict:
-            self.output_file_replace = config_dict['OutputFileReplace']
-        else:
-            print("ERROR: Can not find OutputFileReplace in the config file!")
-            sys.exit()
-
         # NEW! Select the form of the output files
         if 'OutputFileForm' in config_dict:
             self.output_file_form = config_dict['OutputFileForm']
@@ -151,186 +125,7 @@ class Mgfpj:
         else:
             self.output_file_form = "sinogram"
 
-        ########  parameters related to the input image volume (slice) ########
-        if 'ImageDimension' in config_dict:
-            self.img_dim = config_dict['ImageDimension']
-            if self.img_dim<0 or not isinstance(self.img_dim, int):
-                print('ERROR: ImageDimension must be a positive integer!')
-                sys.exit()
-        else:
-            print('ERROR: can not find ImageDimension!')
-            sys.exit()
-        if 'PixelSize' in config_dict:
-            self.img_pix_size = config_dict['PixelSize']
-            if not isinstance(self.img_pix_size, float) and not isinstance(self.img_pix_size, int):
-                print('ERROR: PixelSize must be a number!')
-                sys.exit()
-            if self.img_pix_size < 0:
-                print('ERROR: PixelSize must be positive!')
-                sys.exit()
-        else:
-            print('ERROR: can not find PixelSize!')
-            sys.exit()
-               
-        if 'SliceCount' in config_dict:
-            # 根据mgfpj现有的规则用SliceCount表示image的z维度而非用imageSliceCount
-            # compatible with C++ version
-            self.img_dim_z = config_dict['SliceCount']
-        elif 'ImageDimensionZ' in config_dict:
-            self.img_dim_z = config_dict['ImageDimensionZ']
-        else:
-            print("ERROR: Can not find image dimension along Z direction (ImageDimensionZ or SliceCount)!")
-            sys.exit() 
-        if not isinstance(self.img_dim_z,int) or self.img_dim_z <= 0:
-            print('ERROR: ImageDimensionZ (ImageSliceCount) must be a positive integer!')
-            sys.exit()
         
-        # image center along x and y direction
-        if 'ImageCenter' in config_dict:
-            self.img_center = config_dict['ImageCenter']
-            if not isinstance(self.img_center,list) or len(self.img_center)!=2:
-                print('ERROR: ImageCenter must be an array with two numbers!')
-                sys.exit()
-            self.img_center_x = self.img_center[0]
-            self.img_center_y = self.img_center[1]
-        else:
-            self.img_center_x = 0.0
-            self.img_center_y = 0.0
-
-        # img center along z direction
-        if 'ImageCenterZ' in config_dict:
-            self.img_center_z = config_dict['ImageCenterZ']
-            if not isinstance(self.img_center_z,float) and not isinstance(self.img_center_z,int):
-                print('ERROR: ImageCenterZ must be a number!')
-                sys.exit()
-        else:
-            self.img_center_z = 0.0
-
-        if 'ConeBeam' in config_dict:
-            self.cone_beam = config_dict['ConeBeam']
-            if not isinstance(self.cone_beam,bool):
-                print('ERROR: ConeBeam must be true or false!')
-                sys.exit()
-        else:
-            self.cone_beam = False
-
-        ######## parameters related to the detector ########
-        # detector type (flat panel or curved)
-        if 'CurvedDetector' in config_dict:
-            if isinstance(config_dict['CurvedDetector'], bool):
-                self.curved_dect = config_dict['CurvedDetector']
-            else:
-                print("ERROR: CurvedDetector can only be true or false!")
-                sys.exit()
-            if self.curved_dect:
-                print("--Curved detector")
-        else:
-            self.curved_dect = False 
-
-        if 'DetectorElementCountHorizontal' in config_dict:
-            self.dect_elem_count_horizontal = config_dict['DetectorElementCountHorizontal']
-        elif 'SinogramWidth' in config_dict:
-            self.dect_elem_count_horizontal = config_dict['SinogramWidth']
-        elif 'DetectorElementCount' in config_dict:
-            self.dect_elem_count_horizontal = config_dict['DetectorElementCount']
-        else:
-            print("ERROR: Can not find DetectorElementCountHorizontal (SinogramWidth or DetectorElementCount)!")
-            sys.exit()
-        if self.dect_elem_count_horizontal <= 0:
-            print("ERROR: DetectorElementCountHorizontal (SinogramWidth) should be larger than 0!")
-            sys.exit()
-        elif self.dect_elem_count_horizontal % 1 != 0:
-            print("ERROR: DetectorElementCountHorizontal (SinogramWidth) should be an integer!")
-            sys.exit()
-
-        if 'DetectorElementWidth' in config_dict:
-            self.dect_elem_width = config_dict['DetectorElementWidth']
-        elif 'DetectorElementSize' in config_dict:
-            self.dect_elem_width = config_dict['DetectorElementSize']
-        else:
-            print("ERROR: Can not find DetectorElementWidth (DetectorElementSize)!")
-            sys.exit()
-        if self.dect_elem_width <= 0:
-            print("ERROR: DetectorElementWidth (DetectorElementSize) should be larger than 0!")
-            sys.exit()
-
-        if 'DetectorOffcenter' in config_dict:
-            self.dect_offset_horizontal = config_dict['DetectorOffcenter']
-        elif 'DetectorOffsetHorizontal' in config_dict:
-            self.dect_offset_horizontal = config_dict['DetectorOffsetHorizontal']
-        else:
-            self.dect_offset_horizontal = 0.0
-            print("Warning: Can not find DetectorOffsetHorizontal (DetectorOffcenter); Using default value 0")
-            # self.return_information += "--Warning: Can not find horizontal detector offset; Using default value 0\n"
-        if not isinstance(self.dect_offset_horizontal, float) and not isinstance(self.dect_offset_horizontal, int):
-            print("ERROR: DetectorOffsetHorizontal (DetectorOffcenter) should be a number!")
-            sys.exit()
-
-        ######## CT scan parameters ########
-        if 'SourceIsocenterDistance' in config_dict:
-            self.source_isocenter_dis = config_dict['SourceIsocenterDistance']
-            if not isinstance(self.source_isocenter_dis, float) and not isinstance(self.source_isocenter_dis, int):
-                print('ERROR: SourceIsocenterDistance must be a number!')
-                sys.exit()
-            if self.source_isocenter_dis<=0.0:
-                print('ERROR: SourceIsocenterDistance must be positive!')
-                sys.exit()
-        else:
-            self.source_isocenter_dis = self.dect_elem_count_horizontal * self.dect_elem_width * 1000.0
-            print('Warning: Did not find SourceIsocenterDistance; Set to infinity!')
-            
-        if 'SourceDetectorDistance' in config_dict:
-            self.source_dect_dis = config_dict['SourceDetectorDistance']
-            if not isinstance(self.source_dect_dis, float) and not isinstance(self.source_dect_dis, int):
-                print('ERROR: SourceDetectorDistance must be a number!')
-                sys.exit()
-            if self.source_dect_dis<=0.0:
-                print('ERROR: SourceDetectorDistance must be positive!')
-                sys.exit()
-        else:
-            self.source_dect_dis = self.dect_elem_count_horizontal * self.dect_elem_width * 1000.0
-            print('Warning: Did not find SourceDetectorDistance; Set to infinity!')
-        
-        # image rotation (Start Angle) for forward projection
-        if 'StartAngle' in config_dict:
-            self.start_angle = config_dict['StartAngle'] / 180.0 * PI
-        elif 'ImageRotation' in config_dict:
-            self.start_angle = config_dict['ImageRotation'] / 180.0 * PI   
-        else:
-            self.start_angle = 0.0
-        if not isinstance(self.start_angle, float) and not isinstance(self.start_angle, int):
-            print('ERROR: ImageRotation must be a number!')
-            sys.exit()
-            
-        if 'TotalScanAngle' in config_dict:
-            self.scan_angle = config_dict['TotalScanAngle'] / 180.0 * PI
-        else:
-            self.scan_angle = 2 * PI
-        if not isinstance(self.scan_angle, float) and not isinstance(self.scan_angle, int):
-            print("ERROR: TotalScanAngle should be a number!")
-            sys.exit()
-
-        if abs(self.scan_angle % (2*PI)) < (0.01 / 180 * PI):
-            print('--Full scan, scan Angle = %.1f degrees' %
-                  (self.scan_angle / PI * 180))
-            # self.return_information += '--Full scan, scan Angle = %.1f degrees\n' % (self.total_scan_angle / PI * 180)
-        else:
-            print('--Short scan, scan Angle = %.1f degrees' %
-                  (self.scan_angle / PI * 180))
-            # self.return_information += '--Short scan, scan Angle = %.1f degrees\n' % (self.total_scan_angle / PI * 180)
-
-        if 'Views' in config_dict:
-            self.view_num = config_dict['Views']
-        else:
-            print("ERROR: Can not find number of views!")
-            sys.exit()
-        if not isinstance(self.view_num, float) and not isinstance(self.view_num, int):
-            print("ERROR: Views should be a number!")
-            sys.exit()
-        if self.view_num % 1!=0 or self.view_num<0:
-            print("ERROR: Views must be must be a positive integer!")
-            sys.exit()
-
         ######## parameters related to fpj calculation ########
         if 'OversampleSize' in config_dict:
             # oversample along the horizontal direction
@@ -350,94 +145,53 @@ class Mgfpj:
         else:
             self.fpj_step_size = 0.2
 
-        if 'PMatrixDetectorElementSize' in config_dict:
-            self.pmatrix_dect_elem_width = config_dict['PMatrixDetectorElementSize']
-        else:
-            self.pmatrix_dect_elem_width = self.dect_elem_width
-
-        ######## parameters related to cone beam scan ########
-        if self.cone_beam:
-            print("--Cone beam forward projection")
-            # image voxel height
-            if 'VoxelHeight' in config_dict:
-                self.img_voxel_height = config_dict['VoxelHeight']
-            elif 'ImageSliceThickness' in config_dict:
-                self.img_voxel_height = config_dict['ImageSliceThickness']
-            else:
-                print("ERROR: Can not find image voxel height for cone beam recon!")
-                sys.exit()
-
-            if 'DetectorElementCountVertical' in config_dict:
-                self.dect_elem_count_vertical = config_dict['DetectorElementCountVertical']
-            elif 'DetectorZElementCount' in config_dict:
-                self.dect_elem_count_vertical = config_dict['DetectorZElementCount']
-            else:
-                print(
-                    "ERROR: Can not find detector element count along vertical direction!")
-                sys.exit()
-
-            # detector element height
-            if 'SliceThickness' in config_dict:
-                self.dect_elem_height = config_dict['SliceThickness']
-            elif 'DetectorElementHeight' in config_dict:
-                self.dect_elem_height = config_dict['DetectorElementHeight']
-            else:
-                print("ERROR: Can not find detector element height for cone beam recon! ")
-                sys.exit()
-
-            # detector offset vertical
-            if 'DetectorZOffcenter' in config_dict:
-                self.dect_offset_vertical = config_dict['DetectorZOffcenter']
-            elif 'DetectorOffsetVertical' in config_dict:
-                self.dect_offset_vertical = config_dict['DetectorOffsetVertical']
-            else:
-                self.dect_offset_vertical = 0.0
-                print("Warning: Can not find vertical detector offset for cone beam recon; Using default value 0")
-        else:
-            self.dect_elem_count_vertical = self.img_dim_z
-            self.img_voxel_height = 0.0
-            self.dect_elem_height = 0.0
-            self.dect_offset_vertical = 0.0
-
-        ######## whether images are converted to HU for the input image ########
-        if 'WaterMu' in config_dict:
-            self.water_mu = config_dict['WaterMu']
-            self.convert_to_HU = True
-            print("--Converted to HU")
-        else:
-            self.convert_to_HU = False
-
         ######### Helical Scan parameters ########
         if 'HelicalPitch' in config_dict:
             self.helical_scan = True
             self.helical_pitch = config_dict['HelicalPitch']
+            print('--Helical scan')
         else:
             self.helical_scan = False
-            self.helical_pitch = 0
+            self.helical_pitch = 0.0
 
-        if (self.helical_scan) and ('ImageCenterZ' not in config_dict):
-            self.img_center_z = self.img_voxel_height * \
-                (self.img_dim_z - 1) / 2.0 * np.sign(self.helical_pitch)
-            print("Warning: Did not find image center along Z direction in the config file!")
-            print("For helical scans, the first view begins with the bottom or the top of the image object; the image center along Z direction is set accordingly!")
+        if (self.helical_scan):
+            #if ImageCenterZ is not defined or is wrongly auto set from mgfbp
+            if ('ImageCenterZ' not in config_dict) or (self.img_center_z_auto_set_from_fbp): 
+                self.img_center_z = self.img_voxel_height * \
+                    (self.img_dim_z - 1) / 2.0 * np.sign(self.helical_pitch)
+                print("Warning: ImageCenterZ is not in the config file or is wrongly set from run_mgfbp!")
+                print("For helical scans, the first view begins with the bottom or the top of the image object;")
+                print("ImageCenterZ is re-set accordingly!")
 
         # NEW! add poisson noise to generated sinogram
         if 'PhotonNumber' in config_dict:
             self.add_possion_noise = True
             self.photon_number = config_dict['PhotonNumber']
+            if not isinstance(self.photon_number,float) and not isinstance(self.photon_number,int):
+                print("ERROR: PhotonNumber must be a number!")
+                sys.exit()
         else:
             self.add_possion_noise = False
             self.photon_number = 0
-
+        
+        #alias for image rotation
+        if 'StartAngle' in config_dict:
+            self.img_rot = config_dict['StartAngle']
+            if not isinstance(self.img_rot,float) and not isinstance(self.img_rot,int):
+                print("ERROR: StartAngle must be a number!")
+                sys.exit()
+            
+        
+        
+        del self.img_recon_taichi
+        del self.img_recon
+        del self.img_sgm_filtered_taichi
+        del self.img_sgm_filtered_intermediate_taichi
         self.img_image = np.zeros(
             (self.img_dim_z, self.img_dim, self.img_dim), dtype=np.float32)
-        # for sgm in ram, we initialize a 3D buffer
-        self.img_sgm = np.zeros((self.dect_elem_count_vertical, self.view_num,
-                                self.dect_elem_count_horizontal), dtype=np.float32)
         self.array_u_taichi = ti.field(
             dtype=ti.f32, shape=self.dect_elem_count_horizontal*self.oversample_size)
-        self.array_v_taichi = ti.field(
-            dtype=ti.f32, shape=self.dect_elem_count_vertical)
+
         self.img_image_taichi = ti.field(dtype=ti.f32, shape=(
             self.img_dim_z, self.img_dim, self.img_dim))
         # for sgm in gpu ram, we initialize 2D buffer; since gpu ram is limited
@@ -446,12 +200,25 @@ class Mgfpj:
         self.img_sgm_taichi = ti.field(dtype=ti.f32, shape=(
             1, self.view_num, self.dect_elem_count_horizontal))
         self.array_angle_taichi = ti.field(dtype=ti.f32, shape=self.view_num)
-
-    @ti.kernel
-    def GenerateAngleArray(self, view_num: ti.i32, start_angle: ti.f32, scan_angle: ti.f32, array_angle_taichi: ti.template()):
-        # 计算beta并用弧度制的形式表示
-        for i in ti.ndrange(view_num):
-            array_angle_taichi[i] = (scan_angle / view_num * i + start_angle)
+        self.matrix_A_each_view_taichi = ti.field(dtype=ti.f32, shape=(9*self.view_num, 1))
+        self.x_s_each_view_taichi = ti.field(dtype=ti.f32, shape=(3*self.view_num, 1))
+        if self.bool_apply_pmatrix:
+            self.GenerateMatrixAFromPMatrix()
+            self.matrix_A_each_view_taichi.from_numpy(self.matrix_A_each_view)
+            self.x_s_each_view_taichi.from_numpy(self.x_s_each_view)
+    
+    #this function record the A matrix ([e_u, e_v, x_do-x_s]) and x_s for each view
+    #These pieces of information will be applied for forward projection using pmatrix
+    def GenerateMatrixAFromPMatrix(self):
+        self.matrix_A_each_view = np.zeros(shape = (9*self.view_num,1),dtype = np.float32)
+        self.x_s_each_view = np.zeros(shape = (3*self.view_num,1),dtype = np.float32)
+        for view_idx in range(self.view_num):
+            pmatrix_this_view = self.array_pmatrix[(view_idx*12):(view_idx+1)*12]#get the pmatrix for this view
+            pmatrix_this_view = np.reshape(pmatrix_this_view,[3,4])#reshape it to be 3x4 matrix
+            matrix_A = np.linalg.inv(pmatrix_this_view[:,0:3])#matrix A is the inverse of the 3x3 matrix from the first three columns
+            self.matrix_A_each_view[view_idx*9: (view_idx+1) * 9,0] = np.squeeze(matrix_A.reshape((9,1)))
+            x_s = - np.matmul(matrix_A,pmatrix_this_view[:,3]).reshape([3,1])#calculate the source position
+            self.x_s_each_view[view_idx*3: (view_idx+1) * 3,0] = np.squeeze(x_s.reshape((3,1)))
 
     @ti.kernel
     def GenerateDectPixPosArray(self, dect_elem_count_horizontal: ti.i32, dect_elem_width: ti.f32, dect_offset_horizontal: ti.f32, array_u_taichi: ti.template()):
@@ -468,7 +235,8 @@ class Mgfpj:
                                   img_pix_size: ti.f32, img_voxel_height: ti.f32, source_isocenter_dis: ti.f32,
                                   source_dect_dis: ti.f32, cone_beam: ti.i32, helical_scan: ti.i32, helical_pitch: ti.f32,
                                   v_idx: ti.i32, fpj_step_size: ti.f32, img_center_x: ti.f32,
-                                  img_center_y: ti.f32, img_center_z: ti.f32, curved_dect: ti.i32):
+                                  img_center_y: ti.f32, img_center_z: ti.f32, curved_dect: ti.i32, matrix_A_each_view_taichi: ti.template(),\
+                                  x_s_each_view_taichi: ti.template(), bool_apply_pmatrix: ti.i32):
 
         # This new version of code assumes that the gantry stays stationary
         # while the image object rotates
@@ -483,8 +251,8 @@ class Mgfpj:
         source_pos_y = 0.0
         source_pos_z = 0.0
 
-        img_dimension = img_dim * img_pix_size  # image dimension for each slice
-        image_dimension_z = img_dim_z * img_voxel_height
+        img_dimension = img_dim * img_pix_size  # image size for each slice
+        image_dimension_z = img_dim_z * img_voxel_height #image size z 
 
         x = y = z = 0.0  # initialize position of the voxel current step
         # initialize position of the voxel for current step after rotation
@@ -514,6 +282,7 @@ class Mgfpj:
                                (img_voxel_height ** 2))**0.5
         sgm_val_lowerslice = sgm_val_upperslice = 0.0
 
+        #calculate the distance that the gantry moves between adjacent views
         z_dis_per_view = 0.0
         if self.helical_scan:
             total_scan_angle = abs((array_angle_taichi[view_num - 1] - array_angle_taichi[0])) / (view_num - 1) * view_num
@@ -521,12 +290,13 @@ class Mgfpj:
             z_dis_per_view = helical_pitch * (num_laps / view_num) * (abs(
                 array_v_taichi[1] - array_v_taichi[0]) * dect_elem_count_vertical) / (sdd / sid)
 
-        # count of steps
+        # number of steps
         count_steps = int(
             ti.floor((l_max - l_min)/(fpj_step_size * voxel_diagonal_size)))
 
         for u_idx, angle_idx in ti.ndrange(dect_elem_count_horizontal_oversamplesize, view_num):
 
+            #caluclate the position of the detector element
             if self.curved_dect:
                 gamma_prime = (array_u_taichi[u_idx]) / sdd
                 dect_elem_pos_x = -sdd * ti.cos(gamma_prime) + sid
@@ -541,30 +311,54 @@ class Mgfpj:
             dect_elem_pos_z = array_v_taichi[v_idx] + z_dis_per_view * angle_idx
             # assume that the source and the detector moves upward for a helical scan (pitch>0)
             source_pos_z = z_dis_per_view * angle_idx
-
+            #distance between the source and the detector element
             source_dect_elem_dis = ((dect_elem_pos_x - source_pos_x)**2 + (
                 dect_elem_pos_y - source_pos_y)**2 + (dect_elem_pos_z - source_pos_z)**2) ** 0.5
-
+            #calculate the unit vector of \vec(x_d - x_s)
             unit_vec_lambda_x = (dect_elem_pos_x - source_pos_x) / source_dect_elem_dis
             unit_vec_lambda_y = (dect_elem_pos_y - source_pos_y) / source_dect_elem_dis
             unit_vec_lambda_z = (dect_elem_pos_z - source_pos_z) / source_dect_elem_dis
 
             temp_sgm_val = 0.0
-
+            one_over_mag = 0.0 
+            # the inverse of the magnification factor for pmatrix forward projection (s)
             for step_idx in ti.ndrange(count_steps):
+                # we did not use if bool_apply_pmatrix here is because we found this slows downs the computational speed
+                
+                #for pmatrix case
+                #[x,y,z]^T = A * s * [u,v,1]^T + x_s^T
+                one_over_mag = (step_idx * fpj_step_size * voxel_diagonal_size + l_min) / source_dect_elem_dis
+                x_rot_p = one_over_mag * (matrix_A_each_view_taichi[angle_idx*9,0] * u_idx \
+                                        + matrix_A_each_view_taichi[angle_idx*9+1,0] * v_idx\
+                                            + matrix_A_each_view_taichi[angle_idx*9+2,0] * 1) \
+                                            + x_s_each_view_taichi[angle_idx*3,0]
+                y_rot_p = one_over_mag * (matrix_A_each_view_taichi[angle_idx*9+3,0] * u_idx \
+                                        + matrix_A_each_view_taichi[angle_idx*9+4,0] * v_idx\
+                                            + matrix_A_each_view_taichi[angle_idx*9+5,0] * 1)\
+                                            + x_s_each_view_taichi[angle_idx*3+1,0]
+                z_rot_p = one_over_mag * (matrix_A_each_view_taichi[angle_idx*9+6,0] * u_idx \
+                                        + matrix_A_each_view_taichi[angle_idx*9+7,0] * v_idx\
+                                            + matrix_A_each_view_taichi[angle_idx*9+8,0] * 1)\
+                                            + x_s_each_view_taichi[angle_idx*3+2,0] + z_dis_per_view * angle_idx
+                                            # for helical scan, if the gantry stay stationary, the object moves downward
+                                            # z coordinate of the projected area increases if helical pitch > 0
+                #for none-pmatrix case                          
                 x = source_pos_x + unit_vec_lambda_x * \
                     (step_idx * fpj_step_size * voxel_diagonal_size + l_min)
                 y = source_pos_y + unit_vec_lambda_y * \
                     (step_idx * fpj_step_size * voxel_diagonal_size + l_min)
                 z = source_pos_z + unit_vec_lambda_z * \
                     (step_idx * fpj_step_size * voxel_diagonal_size + l_min)
-
-                x_rot = x * ti.cos(array_angle_taichi[angle_idx]) - \
+                x_rot_np = x * ti.cos(array_angle_taichi[angle_idx]) - \
                     y * ti.sin(array_angle_taichi[angle_idx])
-                y_rot = y * ti.cos(array_angle_taichi[angle_idx]) + \
+                y_rot_np = y * ti.cos(array_angle_taichi[angle_idx]) + \
                     x * ti.sin(array_angle_taichi[angle_idx])
-                z_rot = z
-
+                z_rot_np = z
+                
+                x_rot = x_rot_p * bool_apply_pmatrix + x_rot_np *(1 - bool_apply_pmatrix)
+                y_rot = y_rot_p * bool_apply_pmatrix + y_rot_np *(1 - bool_apply_pmatrix)
+                z_rot = z_rot_p * bool_apply_pmatrix + z_rot_np *(1 - bool_apply_pmatrix)
+                
                 x_idx = int(ti.floor((x_rot - x_0) / img_pix_size))
                 y_idx = int(ti.floor((y_rot - y_0) / (- img_pix_size)))
 
@@ -633,7 +427,7 @@ class Mgfpj:
                 self.img_image = (self.img_image + 1000.0) / \
                     1000.0 * self.water_mu
             self.img_image_taichi.from_numpy(self.img_image)
-            # 将正弦图sgm存储到taichi专用的数组中帮助加速程序
+            # å°æ­£å¼¦å¾sgmå­å¨å°taichiä¸ç¨çæ°ç»ä¸­å¸®å©å éç¨åº?
             return True
 
     def TransferToRAM(self, v_idx):
@@ -668,7 +462,7 @@ class Mgfpj:
 
 
 def remove_comments(jsonc_str):
-    # 使用正则表达式去除注释
+    # ä½¿ç¨æ­£åè¡¨è¾¾å¼å»é¤æ³¨é?
     pattern = re.compile(r'//.*?$|/\*.*?\*/', re.MULTILINE | re.DOTALL)
     return re.sub(pattern, '', jsonc_str)
 
@@ -680,7 +474,6 @@ def save_jsonc(save_path, data):
 
 
 def load_jsonc(file_path):
-    # 读取jsonc文件并以字典的形式返回所有数据
     with open(file_path, 'r') as file:
         jsonc_content = file.read()
         json_content = remove_comments(jsonc_content)
@@ -721,8 +514,5 @@ def imaddRaw(img, path: str, dtype=None, idx=1):
 
 
 def ReadConfigFile(file_path):
-    # 替换为你的JSONC文件路径
     json_data = load_jsonc(file_path)
-    # 现在，json_data包含了从JSONC文件中解析出的数据
-    # print(json_data)
     return json_data
