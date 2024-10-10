@@ -73,9 +73,9 @@ class Mgfpj(Mgfbp):
         self.file_processed_count = 0
         self.GenerateAngleArray(
             self.view_num, self.img_rot, self.total_scan_angle, self.array_angle_taichi)
-        self.GenerateDectPixPosArray(
+        self.GenerateDectPixPosArrayFPJ(
             self.dect_elem_count_vertical, - self.dect_elem_height, self.dect_offset_vertical, self.array_v_taichi)
-        self.GenerateDectPixPosArray(self.dect_elem_count_horizontal*self.oversample_size, self.dect_elem_width/self.oversample_size,
+        self.GenerateDectPixPosArrayFPJ(self.dect_elem_count_horizontal*self.oversample_size, self.dect_elem_width/self.oversample_size,
                                      self.dect_offset_horizontal, self.array_u_taichi)
 
         for file in os.listdir(self.input_dir):
@@ -221,7 +221,7 @@ class Mgfpj(Mgfbp):
             self.x_s_each_view[view_idx*3: (view_idx+1) * 3,0] = np.squeeze(x_s.reshape((3,1)))
 
     @ti.kernel
-    def GenerateDectPixPosArray(self, dect_elem_count_horizontal: ti.i32, dect_elem_width: ti.f32, dect_offset_horizontal: ti.f32, array_u_taichi: ti.template()):
+    def GenerateDectPixPosArrayFPJ(self, dect_elem_count_horizontal: ti.i32, dect_elem_width: ti.f32, dect_offset_horizontal: ti.f32, array_u_taichi: ti.template()):
         for i in ti.ndrange(dect_elem_count_horizontal):
             array_u_taichi[i] = (i - (dect_elem_count_horizontal - 1) /
                                  2.0) * dect_elem_width + dect_offset_horizontal
@@ -414,8 +414,7 @@ class Mgfpj(Mgfbp):
             self.output_file_replace[0], self.output_file_replace[1], file)
         if self.output_file == file:
             # did not file the string in file, so that output_file and file are the same
-            print(
-                f"ERROR: did not find string '{self.output_file_replace[0]}' to replace in '{self.output_file}'")
+            print(f"ERROR: did not find string '{self.output_file_replace[0]}' to replace in '{self.output_file}'")
             sys.exit()
         else:
             self.output_path = os.path.join(
@@ -427,7 +426,6 @@ class Mgfpj(Mgfbp):
                 self.img_image = (self.img_image + 1000.0) / \
                     1000.0 * self.water_mu
             self.img_image_taichi.from_numpy(self.img_image)
-            # å°æ­£å¼¦å¾sgmå­å¨å°taichiä¸ç¨çæ°ç»ä¸­å¸®å©å éç¨åº?
             return True
 
     def TransferToRAM(self, v_idx):
@@ -443,8 +441,7 @@ class Mgfpj(Mgfbp):
                 ti.randn() * ti.sqrt(transmitted_photon_number)
             if transmitted_photon_number <= 0:
                 transmitted_photon_number = 1e-6
-            img_sgm_taichi[0, angle_idx, u_idx] = ti.log(
-                photon_number / transmitted_photon_number)
+            img_sgm_taichi[0, angle_idx, u_idx] = ti.log(photon_number / transmitted_photon_number)
 
     def SaveSinogram(self):
         if self.cone_beam:
@@ -462,7 +459,6 @@ class Mgfpj(Mgfbp):
 
 
 def remove_comments(jsonc_str):
-    # ä½¿ç¨æ­£åè¡¨è¾¾å¼å»é¤æ³¨é?
     pattern = re.compile(r'//.*?$|/\*.*?\*/', re.MULTILINE | re.DOTALL)
     return re.sub(pattern, '', jsonc_str)
 

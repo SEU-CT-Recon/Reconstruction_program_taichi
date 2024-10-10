@@ -420,8 +420,10 @@ class Mgfbp:
                 self.recon_view_mode = 1
             elif temp_str == 'coronal':
                 self.recon_view_mode = 2
+                print('--Coronal view')
             elif temp_str == 'sagittal':
                 self.recon_view_mode = 3
+                print('--Sagittal view')
             else:
                 print("ERROR: ReconViewMode can only be axial, coronal or sagittal!")
                 sys.exit()
@@ -463,6 +465,7 @@ class Mgfbp:
                 sys.exit()
         else:
             self.cone_beam = False
+            self.bool_apply_pmatrix = False
         
         if self.cone_beam:
             print("--Cone beam")

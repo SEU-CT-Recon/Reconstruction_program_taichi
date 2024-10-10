@@ -19,7 +19,7 @@ def run_mgfbp_ir(file_path):
     start_time = time.time() 
     ti.reset()
     ti.init(arch=ti.gpu)
-    print('Performing Helical Rebin and FBP from MandoCT-Taichi (ver 0.1) ...')
+    print('Performing Iterative Recon from MandoCT-Taichi (ver 0.1) ...')
     # record start time point
     
     #Delete unnecessary warinings
@@ -32,16 +32,13 @@ def run_mgfbp_ir(file_path):
         sys.exit()
     config_dict = ReadConfigFile(file_path)#读入jsonc文件并以字典的形式存储在config_dict中
     
+    print("Generating seed image from FBP ...")
     fbp =  Mgfbp(config_dict) #将config_dict数据以字典的形式送入对象中
-    if not os.path.exists(fbp.output_dir):
-        os.makedirs(fbp.output_dir)
     img_recon_seed = fbp.MainFunction() #generate a seed from fbp reconstruction
-    img_recon_seed = np.zeros((1,512, 512),dtype=np.float32)
+    #img_recon_seed = np.zeros((1,512, 512),dtype=np.float32)
     
+    print("\nPerform Iterative Recon ...")
     fbp = Mgfbp_ir(config_dict) #将config_dict数据以字典的形式送入对象中
-    # Ensure output directory exists; if not, create the directory
-    if not os.path.exists(fbp.output_dir):
-        os.makedirs(fbp.output_dir)
     img_recon = fbp.MainFunction(img_recon_seed)#use the seed to initialize the iterative process
     gc.collect()# 手动触发垃圾回收
     ti.reset()# free gpu ram
@@ -61,6 +58,16 @@ def run_mgfbp_ir(file_path):
 class Mgfbp_ir(Mgfbp):
     def __init__(self,config_dict):
         super(Mgfbp_ir,self).__init__(config_dict)
+        
+        if 'NumberOfIterations' in config_dict:
+            self.num_iter = config_dict['NumberOfIterations']
+            if not isinstance(self.num_iter,int) or self.num_iter<0:
+                print("ERROR: NumberOfIterations must be a positive integer!")
+                sys.exit()
+        else:
+            self.num_iter = 100
+            print("Warning: Did not find NumberOfIterations! Use default value 100. ")
+        
         if 'HelicalPitch' in config_dict:
             self.helical_scan = True
             self.helical_pitch = config_dict['HelicalPitch']
@@ -90,8 +97,7 @@ class Mgfbp_ir(Mgfbp):
             if re.match(self.input_files_pattern, file):#match the file pattern
                 if self.ReadSinogram(file):
                     self.file_processed_count += 1 
-                    print('\nReconstructing %s ...' % self.input_path)
-                    print('Back Projection ...')
+                    print('Reconstructing %s ...' % self.input_path)
                     self.img_x = img_recon_seed
                     
                     #P^T b
@@ -110,7 +116,8 @@ class Mgfbp_ir(Mgfbp):
                                                    self.dect_elem_count_vertical, self.view_num, self.img_pix_size, self.img_voxel_height,
                                                    self.source_isocenter_dis, self.source_dect_dis, self.cone_beam,
                                                    self.helical_scan, self.helical_pitch, 0, 1,
-                                                   self.img_center_x, self.img_center_y, self.img_center_z, self.curved_dect)
+                                                   self.img_center_x, self.img_center_y, self.img_center_z, self.curved_dect,
+                                                   self.matrix_A_each_view_taichi,self.x_s_each_view_taichi,self.bool_apply_pmatrix)
                     
                     self.BackProjectionPixelDriven(self.dect_elem_count_vertical_actual, self.img_dim, self.dect_elem_count_horizontal, \
                                     self.view_num, self.dect_elem_width,self.img_pix_size, self.source_isocenter_dis, self.source_dect_dis,self.total_scan_angle,\
@@ -123,9 +130,9 @@ class Mgfbp_ir(Mgfbp):
                     
                     self.img_r = self.img_bp_fp_x - self.img_bp_b #r
                     self.img_d = self.img_r #d
-                    for idx in range(1000):
-                        if idx%10==0:
-                            print('%d\n' %idx)
+                    for idx in range(100):
+                        str = 'Running iterations: %4d/%4d' % (idx+1, 100)
+                        print('\r' + str, end='')
                         
                         #P^T P d
                         self.ForwardProjectionBilinear(self.img_d, self.img_fp_d, self.array_u_taichi,
@@ -134,7 +141,8 @@ class Mgfbp_ir(Mgfbp):
                                                        self.dect_elem_count_vertical, self.view_num, self.img_pix_size, self.img_voxel_height,
                                                        self.source_isocenter_dis, self.source_dect_dis, self.cone_beam,
                                                        self.helical_scan, self.helical_pitch, 0, 1,
-                                                       self.img_center_x, self.img_center_y, self.img_center_z, self.curved_dect)
+                                                       self.img_center_x, self.img_center_y, self.img_center_z, self.curved_dect,
+                                                       self.matrix_A_each_view_taichi,self.x_s_each_view_taichi,self.bool_apply_pmatrix)
                         
                         self.BackProjectionPixelDriven(self.dect_elem_count_vertical_actual, self.img_dim, self.dect_elem_count_horizontal, \
                                         self.view_num, self.dect_elem_width,self.img_pix_size, self.source_isocenter_dis, self.source_dect_dis,self.total_scan_angle,\
@@ -155,7 +163,7 @@ class Mgfbp_ir(Mgfbp):
                             imaddRaw(self.img_x,self.output_path,dtype=np.float32,idx = idx)
                         
                     
-                    print('Saving to %s !' % self.output_path)
+                    print('\nSaving to %s !' % self.output_path)
                     #self.SaveReconImg()
         return self.img_recon #函数返回重建图
     
@@ -206,12 +214,12 @@ class Mgfbp_ir(Mgfbp):
         unit_vec_lambda_x = unit_vec_lambda_y = unit_vec_lambda_z = 0.0
         # lower range for the line integral
         l_min = sid - (2 * img_dimension ** 2 +
-                       image_dimension_z ** 2)**0.5 / 2.0
+                        image_dimension_z ** 2)**0.5 / 2.0
         # upper range for the line integral
         l_max = sid + (2 * img_dimension ** 2 +
-                       image_dimension_z ** 2)**0.5 / 2.0
+                        image_dimension_z ** 2)**0.5 / 2.0
         voxel_diagonal_size = (2*(img_pix_size ** 2) +
-                               (img_voxel_height ** 2))**0.5
+                                (img_voxel_height ** 2))**0.5
         sgm_val_lowerslice = sgm_val_upperslice = 0.0
 
         z_dis_per_view = 0.0
@@ -292,7 +300,7 @@ class Mgfbp_ir(Mgfbp):
                                 + x_weight * y_weight * \
                                 img_image_taichi[z_idx + 1, y_idx+1, x_idx + 1]
                             temp_sgm_val += ((1.0 - z_weight) * sgm_val_lowerslice + z_weight *
-                                             sgm_val_upperslice) * fpj_step_size * voxel_diagonal_size
+                                              sgm_val_upperslice) * fpj_step_size * voxel_diagonal_size
                         else:
                             temp_sgm_val += 0.0
                     else:
@@ -424,7 +432,6 @@ class Mgfbp_ir(Mgfbp):
                         val_1 = img_sgm_filtered_taichi[i_z , j , temp_u_idx_floor + 1]
                         img_recon_taichi[i_z, i_y, i_x] += ( distance_weight) * \
                             ((1 - ratio_u) * val_0 + ratio_u * val_1) * delta_angle * div_factor
-                            
     def SaveReconImg(self):
         self.img_recon = self.img_x
         if self.convert_to_HU:
