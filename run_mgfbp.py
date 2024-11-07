@@ -773,7 +773,7 @@ class Mgfbp:
                 if self.positive_v_is_positive_z == 1:
                     print("Attention: +v direction is along +z based on pmatrix! ")
                 
-            x_do_x_s = np.matmul(rotation_matrix_total, matrix_A[:,2]) - 100 * e_u #change x_do - x_s
+            x_do_x_s = np.matmul(rotation_matrix_total, matrix_A[:,2]) #change x_do - x_s
             matrix_A[:,0] = e_u; matrix_A[:,1] = e_v; matrix_A[:,2] = x_do_x_s; #update the matrix A
             matrix_A_inverse = np.linalg.inv(matrix_A) #recalculate the inverse of matrix A
             pmatrix_this_view = np.append(matrix_A_inverse, -np.matmul(matrix_A_inverse,x_s), axis = 1)#get the new pmatrix for this view
