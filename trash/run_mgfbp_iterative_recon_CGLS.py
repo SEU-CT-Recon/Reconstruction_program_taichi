@@ -126,6 +126,8 @@ class Mgfbp_ir(Mgfpj):
                 if self.ReadSinogram(file):
                     self.file_processed_count += 1 
                     print('Reconstructing %s ...' % self.input_path)
+                    if self.convert_to_HU:
+                        img_recon_seed = (img_recon_seed/1000 + 1 ) * self.water_mu
                     self.img_x = img_recon_seed
                     self.img_x_taichi.from_numpy(self.img_x)
                     self.img_sgm_taichi.from_numpy(self.img_sgm)
@@ -164,6 +166,9 @@ class Mgfbp_ir(Mgfpj):
                     
                     self.TaichiFieldSubtraction(self.img_bp_b_taichi,self.img_bp_fp_x_taichi,self.img_r_taichi,self.img_dim,self.img_dim_z)
                     self.img_d_taichi = self.img_r_taichi #d
+                    
+                    loss = np.zeros(shape = [1,self.num_iter])
+                    
                     for idx in range(self.num_iter):
                         #P^T P d
                         for v_idx in range(self.dect_elem_count_vertical_actual): 
@@ -213,8 +218,12 @@ class Mgfbp_ir(Mgfpj):
 
                         # beta = self.TaichiInnerProduct(self.img_r_taichi,self.img_r_taichi,self.img_dim_z,self.img_dim,self.img_dim) / r_i_l2_norm
                         # self.TaichiFieldAdd(self.img_d_taichi, self.img_r_taichi, self.img_d_taichi, beta,self.img_dim,self.img_dim, self.img_dim_z)
-
                         
+                        loss[0,idx] = r_l2_norm
+                        if idx%10 == 0:
+                            plt.plot(range(idx),loss[0,0:idx])                 
+                            plt.show()
+                            
                         if idx%1==0:
                             self.img_x = self.img_x_taichi.to_numpy()
                             imaddRaw(self.img_x[:,:,:],self.output_path, dtype = np.float32, idx = idx)

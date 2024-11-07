@@ -61,8 +61,8 @@ class Mgfpj:
             self.view_num, self.start_angle, self.scan_angle, self.array_angle_taichi)
         self.GenerateDectPixPosArray(
             self.dect_elem_count_vertical, - self.dect_elem_height, self.dect_offset_vertical, self.array_v_taichi)
-        self.GenerateDectPixPosArray(self.dect_elem_count_horizontal*self.oversample_size, self.dect_elem_width/self.oversample_size,
-                                     self.dect_offset_horizontal, self.array_u_taichi)
+        self.GenerateDectPixPosArray(self.dect_elem_count_horizontal*self.oversample_size, -self.dect_elem_width/self.oversample_size,
+                                     -self.dect_offset_horizontal, self.array_u_taichi)
 
         for file in os.listdir(self.input_dir):
             if re.match(self.input_files_pattern, file):
@@ -528,14 +528,14 @@ class Mgfpj:
         for u_idx, angle_idx in ti.ndrange(dect_elem_count_horizontal_oversamplesize, view_num):
 
             if self.curved_dect:
-                gamma_prime = (array_u_taichi[u_idx]) / sdd
+                gamma_prime = ( - array_u_taichi[u_idx]) / sdd #conterclockwise is positive, corresponding to -y direction
                 dect_elem_pos_x = -sdd * ti.cos(gamma_prime) + sid
                 # positive u direction is - y
-                dect_elem_pos_y = -sdd * ti.sin(gamma_prime)
+                dect_elem_pos_y = -sdd * ti.sin(gamma_prime)#negative gamma_prime corresponds to positive y
             else:
                 dect_elem_pos_x = - (sdd - sid)
                 # positive u direction is - y
-                dect_elem_pos_y = - array_u_taichi[u_idx]
+                dect_elem_pos_y = array_u_taichi[u_idx]
                 
             #add this distance to z position to simulate helical scan
             dect_elem_pos_z = array_v_taichi[v_idx] + z_dis_per_view * angle_idx

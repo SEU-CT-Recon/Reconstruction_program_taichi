@@ -110,5 +110,7 @@
   "ReconViewMode":"Coronal" , // axial coronal or sagittal
   "PMatrixDetectorElementHeight" : 0.2, 
   "PMatrixDetectorElementWidth" : 0.2,
-  "SaveModifiedConfigName": "config_1.jsonc"
+  "SaveModifiedConfigName": "config_1.jsonc",
+  "ModifyPMatrixToStandardForm": true, 
+  "DetectorElementVerticalGaussFilterSize": 2
 }

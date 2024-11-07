@@ -10,6 +10,7 @@ import gc
 import math
 from crip.io import imwriteRaw
 from crip.io import imwriteTiff
+import matplotlib.pyplot as plt
 
 PI = 3.1415926536
 
@@ -176,7 +177,10 @@ class Mgfbp:
             self.first_slice_top_row = False # by default, first sgm slice is detector bottom row
             
         if self.first_slice_top_row:
+            self.positive_v_is_positive_z = -1
             print('--First sinogram slice corresponds to top detector row')
+        else:
+            self.positive_v_is_positive_z = 1
         
         if 'SaveFilteredSinogram' in config_dict:
             if isinstance(config_dict['SaveFilteredSinogram'], bool):
@@ -227,6 +231,8 @@ class Mgfbp:
         if self.dect_elem_width <= 0:
             print("ERROR: DetectorElementWidth (DetectorElementSize) should be larger than 0!")
             sys.exit()
+        
+        self.positive_u_is_positive_y = -1 #by default, positive u direction is -y direction
         
         if 'DetectorOffcenter' in config_dict:
             self.dect_offset_horizontal = config_dict['DetectorOffcenter']
@@ -514,7 +520,7 @@ class Mgfbp:
             
             ######### projection matrix recon parameters ########
             ##Projection matrix is only effective for cone beam reconstruction##
-            self.array_pmatrix_taichi = ti.field(dtype=ti.f32, shape=self.view_num * 12)
+            self.array_pmatrix_taichi = ti.field(dtype=ti.f32, shape = self.view_num * 12)
             if 'PMatrixFile' in config_dict:
                 temp_dict = ReadConfigFile(config_dict['PMatrixFile'])
                 if 'Value' in temp_dict:
@@ -536,6 +542,17 @@ class Mgfbp:
                 self.bool_apply_pmatrix = 0
             
             if self.bool_apply_pmatrix:
+                #whether to change the pmatrix source trajectory to standard form 
+                #(source positions will be on the z=0 plane with center at the origin)
+                #(source position for the first view will be on the +x axis)
+                if 'ModifyPMatrixToStandardForm' in config_dict:
+                    self.modify_pmatrix_to_standard_form = config_dict['ModifyPMatrixToStandardForm']
+                    if not isinstance(self.modify_pmatrix_to_standard_form,bool):
+                        print("ERROR: ModifyPMatrixToStandardForm must be True or False!")
+                        sys.exit();
+                else:
+                    self.modify_pmatrix_to_standard_form = True # true by default
+                
                 ## Change the projection matrix Values if a different detector binning is applied for obj CT scan
                 ## compared with the binning mode for pmatrix
                 if 'PMatrixDetectorElementWidth' in config_dict:
@@ -561,8 +578,12 @@ class Mgfbp:
                         sys.exit()
                 else:
                     self.pmatrix_elem_height = self.dect_elem_height;
-                    
-                self.ChangePMatrix_SourceTrajectory()
+                
+                #change the pmatrix source trajectory to standard form 
+                #(source positions will be on the z=0 plane with center at the origin)
+                #(source position for the first view will be on the +x axis)
+                if self.modify_pmatrix_to_standard_form:
+                    self.ChangePMatrix_SourceTrajectory()
                 #save the updated parameters values to the dictionary
                 config_dict['SourceIsocenterDistance'] = self.source_isocenter_dis
                 config_dict['SourceDetectorDistance'] = self.source_dect_dis
@@ -682,16 +703,16 @@ class Mgfbp:
         ## and the source position of the first view is not located on the +x-axis 
         ## The original pmatrix need to be modified
         x_s_rec = np.zeros(shape = (3,self.view_num))
-        for view_idx in range(self.view_num):
+        for view_idx in range(self.view_num): 
             pmatrix_this_view = self.array_pmatrix[(view_idx*12):(view_idx+1)*12]#get the pmatrix for this view
             pmatrix_this_view = np.reshape(pmatrix_this_view,[3,4])#reshape it to be 3x4 matrix
             matrix_A = np.linalg.inv(pmatrix_this_view[:,0:3])#matrix A is the inverse of the 3x3 matrix from the first three columns
             x_s_rec[:,view_idx:view_idx+1]=- np.matmul(matrix_A,pmatrix_this_view[:,3]).reshape([3,1])#calculate the source position
         #after getting the position of the source, we need to calculate the plane of the source trajectory
         #assume the plane is defined as a*x + b*y + c*z = 1
-        matrix_A = x_s_rec.transpose()
+        matrix_B = x_s_rec.transpose()
         vec_y = np.ones(shape = (self.view_num,1))
-        sol = XuLeastSquareSolution(matrix_A, vec_y) #solve a, b and c using least squared method
+        sol = XuLeastSquareSolution(matrix_B, vec_y) #solve a, b and c using least squared method
         
         angle_y = np.arctan(sol[0] / sol[2]) #first rotate along y axis
         angle_x = np.arctan(sol[1] / np.sqrt( sol[0]**2 + sol[2] ** 2 )) * np.sign(sol[2]) #then rotate along x axis
@@ -703,9 +724,9 @@ class Mgfbp:
         x_s_xy_plane = x_s_rec_rot[0:2,:] #get the position when the points are projected onto the xy plane
         #after the projection operation, we need to determine the center for a 2D circle, which is easy
         #assume the circle is x^2 + y^2 - a*x - b*y + c = 0
-        matrix_A = np.concatenate((-x_s_xy_plane.transpose(),np.ones(shape=(self.view_num,1))),axis = 1)
+        matrix_B = np.concatenate((-x_s_xy_plane.transpose(),np.ones(shape=(self.view_num,1))),axis = 1)
         vec_y = -np.sum(x_s_xy_plane**2,axis = 0)
-        sol = XuLeastSquareSolution(matrix_A, vec_y) # solution for a b and c; center is a/2 and b/2
+        sol = XuLeastSquareSolution(matrix_B, vec_y) # solution for a b and c; center is a/2 and b/2
         x_s_rec_rot_shift_xyz = x_s_rec_rot - np.array([[sol[0]/2],[sol[1]/2],[z_c]]) 
         # get the position of the source when it is shifted so that the center of the circle is at the origin.
         # now the source trajectory is in the x-y plane and the circle of the center is located as the origin.
@@ -727,13 +748,13 @@ class Mgfbp:
             matrix_A = np.linalg.inv(pmatrix_this_view[:,0:3])#matrix A is the inverse of the 3x3 matrix from the first three columns
             e_v_0 = matrix_A[:,1] #calculate the unit vector along detector vertical direction
             e_u_0 = matrix_A[:,0] #calculate the unit vector along detector horizontal direction
-            pixel_size_ratio = (self.pmatrix_elem_width / np.linalg.norm(e_u_0) + self.pmatrix_elem_height / np.linalg.norm(e_u_0)) * 0.5
+            pixel_size_ratio = (self.pmatrix_elem_width / np.linalg.norm(e_u_0) + self.pmatrix_elem_height / np.linalg.norm(e_v_0)) * 0.5
             #confirm the pixel size from pmatrix is the same with the preset pmatrix pixel size;
             pmatrix_this_view = pmatrix_this_view / pixel_size_ratio #if not, need to normalize the pmatrix
             
             matrix_A = np.linalg.inv(pmatrix_this_view[:,0:3]) #matrix A is the inverse of the 3x3 matrix from the first three columns
             x_s = x_s_rec_final[:,view_idx:view_idx+1] #calculate the source position
-            if view_idx <= self.view_num - 2:
+            if view_idx <= self.view_num - 2: #calculate total scan angle
                 x_s_next_view =  x_s_rec_final[:,view_idx+1:view_idx+2]
                 delta_angle = math.atan2(x_s_next_view[1], x_s_next_view[0]) - math.atan2(x_s[1], x_s[0])
                 if abs(delta_angle) > PI:
@@ -744,7 +765,15 @@ class Mgfbp:
             e_u_0 = matrix_A[:,0] #calculate the unit vector along detector horizontal direction
             e_v = np.matmul(rotation_matrix_total, e_v_0) #change the unit vector along detector vertical direction
             e_u = np.matmul(rotation_matrix_total, e_u_0) #change the unit vector along detector horizontal direction
-            x_do_x_s = np.matmul(rotation_matrix_total, matrix_A[:,2]) #change x_do - x_s
+            if view_idx == 0:#judge the positive direction of u and v from e_u and e_v in the first view
+                self.positive_u_is_positive_y = np.sign(e_u[1]) # if positive_u_is_positive_y, this outputs 1; otherwise -1; 
+                if self.positive_u_is_positive_y == 1:
+                    print("Attention: +u direction is along +y based on pmatrix! ")
+                self.positive_v_is_positive_z = np.sign(e_v[2]) # if positive_v_is_positive_z, this outputs 1; otherwise -1; 
+                if self.positive_v_is_positive_z == 1:
+                    print("Attention: +v direction is along +z based on pmatrix! ")
+                
+            x_do_x_s = np.matmul(rotation_matrix_total, matrix_A[:,2]) - 100 * e_u #change x_do - x_s
             matrix_A[:,0] = e_u; matrix_A[:,1] = e_v; matrix_A[:,2] = x_do_x_s; #update the matrix A
             matrix_A_inverse = np.linalg.inv(matrix_A) #recalculate the inverse of matrix A
             pmatrix_this_view = np.append(matrix_A_inverse, -np.matmul(matrix_A_inverse,x_s), axis = 1)#get the new pmatrix for this view
@@ -756,13 +785,13 @@ class Mgfbp:
             pmatrix_this_view = np.reshape(pmatrix_this_view,[12,1])#reshape the matrix to be a vector
             self.array_pmatrix[(view_idx*12):(view_idx+1)*12] = pmatrix_this_view[:,0] #update the pmatrix array
         #get offset value for each view
-        self.dect_offset_vertical_each_view = - ((self.dect_elem_count_vertical *self.dect_elem_height / self.pmatrix_elem_height - 1) / 2.0\
-                                       - v_center_rec) * self.pmatrix_elem_height
-        self.dect_offset_horizontal_each_view = ((self.dect_elem_count_horizontal *self.dect_elem_width/ self.pmatrix_elem_width - 1) / 2.0\
-                                       - u_center_rec) * self.pmatrix_elem_width
+        self.dect_offset_vertical_each_view = self.positive_v_is_positive_z * ((self.dect_elem_count_vertical *self.dect_elem_height / self.pmatrix_elem_height - 1) / 2.0\
+                                       - v_center_rec) * self.pmatrix_elem_height #+z is positive
+        self.dect_offset_horizontal_each_view = -self.positive_u_is_positive_y * ((self.dect_elem_count_horizontal *self.dect_elem_width/ self.pmatrix_elem_width - 1) / 2.0\
+                                       - u_center_rec) * self.pmatrix_elem_width #-y is positive based on mgfbp.exe convention
         #update the parameters from the pmatrix
         self.dect_offset_vertical = np.squeeze(np.mean(self.dect_offset_vertical_each_view,axis = 0)).tolist()#calculate the mean offset
-        self.dect_offset_horizontal = np.squeeze(np.mean(self.dect_offset_horizontal_each_view,axis = 0)).tolist()#calculate the mean offset
+        self.dect_offset_horizontal = np.squeeze(np.mean(self.dect_offset_horizontal_each_view,axis = 0)).tolist()#calculate the mean offset 
         self.source_isocenter_dis_each_view = np.sqrt(np.sum(np.multiply(x_s_rec_final,x_s_rec_final), axis = 0))
         self.source_dect_dis_each_view = np.sqrt(np.sum(np.multiply(x_d_center_x_s_rec_final,x_d_center_x_s_rec_final), axis = 0))
         self.source_isocenter_dis =  np.squeeze( np.mean(self.source_isocenter_dis_each_view, axis = 0)).tolist()
@@ -866,17 +895,11 @@ class Mgfbp:
 
     @ti.kernel
     def GenerateDectPixPosArray(self,dect_elem_count_horizontal:ti.i32,dect_elem_count_horizontal_actual:ti.i32,dect_elem_width:ti.f32,\
-                                dect_offset_horizontal:ti.f32,array_u_taichi:ti.template(),dect_elem_begin_idx:ti.i32, first_slice_top_row:ti.i32):
-        #计算u数组，并加入偏移方便后续做处
-        flag = 0
-        if first_slice_top_row:
-            flag = -1 # if first sinogram is the top detector row, it corresponds to a positive v value
-        else:
-            flag = 1
+                                dect_offset_horizontal:ti.f32,array_u_taichi:ti.template(),dect_elem_begin_idx:ti.i32):
         # dect_elem_begin_idx is for recon of partial slices of the sinogram
         # since the slice idx may not begin with 0
         for i in ti.ndrange(dect_elem_count_horizontal_actual):
-            array_u_taichi[i] = flag * (i + dect_elem_begin_idx - (dect_elem_count_horizontal - 1) / 2.0) \
+            array_u_taichi[i] = (i + dect_elem_begin_idx - (dect_elem_count_horizontal - 1) / 2.0) \
                 * dect_elem_width + dect_offset_horizontal
                 
     @ti.kernel
@@ -899,7 +922,7 @@ class Mgfbp:
             for s in ti.ndrange(dect_elem_count_vertical_actual):
                 v_actual = array_v_taichi[s]
                 if curved_dect:
-                    img_sgm_taichi[s,i,j] = img_sgm_taichi[s,i,j] * source_dect_dis * ti.math.cos(u_actual/source_dect_dis) \
+                    img_sgm_taichi[s,i,j] = img_sgm_taichi[s,i,j] * source_dect_dis * ti.math.cos( (-1)*u_actual/source_dect_dis) \
                         * source_dect_dis / ((source_dect_dis**2 + v_actual**2)**0.5)
                 else:
                     img_sgm_taichi[s,i,j]=(img_sgm_taichi[s,i,j] * source_dect_dis * source_dect_dis ) \
@@ -914,9 +937,10 @@ class Mgfbp:
                     rotation_direction =  abs(scan_angle) / (scan_angle)
                     gamma = 0.0
                     if curved_dect:
-                        gamma = (u_actual / source_dect_dis) * rotation_direction
+                        gamma = ((-1) * u_actual / source_dect_dis) * rotation_direction
+                        #positive y corresponds to clockwise -> negative gamma
                     else:
-                        gamma = ti.atan2(u_actual, source_dect_dis) * rotation_direction
+                        gamma = ti.atan2((-1) *u_actual, source_dect_dis) * rotation_direction
                     gamma_max = remain_angle - PI
                     #maximum gamma defined by remain angle
                     #calculation of the parker weighting
@@ -1058,11 +1082,12 @@ class Mgfbp:
                     pix_to_source_parallel_dis = source_isocenter_dis - x * ti.cos(angle_this_view_exclude_img_rot) - y * ti.sin(angle_this_view_exclude_img_rot)
                     if bool_apply_pmatrix == 0:
                         mag_factor = source_dect_dis / pix_to_source_parallel_dis
+                        y_after_rotation_angle_this_view = - x*ti.sin(angle_this_view_exclude_img_rot) + y*ti.cos(angle_this_view_exclude_img_rot)
                         if curved_dect:
-                            pix_proj_to_dect_u = source_dect_dis * ti.atan2(x*ti.sin(angle_this_view_exclude_img_rot)-y*ti.cos(angle_this_view_exclude_img_rot),pix_to_source_parallel_dis)
+                            pix_proj_to_dect_u = source_dect_dis * ti.atan2(y_after_rotation_angle_this_view, pix_to_source_parallel_dis)
                         else:
-                            pix_proj_to_dect_u = mag_factor * (x*ti.sin(angle_this_view_exclude_img_rot)-y*ti.cos(angle_this_view_exclude_img_rot))
-                        pix_proj_to_dect_u_idx = (pix_proj_to_dect_u - array_u_taichi[0]) / dect_elem_width
+                            pix_proj_to_dect_u = mag_factor * y_after_rotation_angle_this_view
+                        pix_proj_to_dect_u_idx = (pix_proj_to_dect_u - array_u_taichi[0]) / (array_u_taichi[1] - array_u_taichi[0])
                     else:
                         mag_factor = 1.0 / (array_pmatrix_taichi[12*j + 8] * x +\
                             array_pmatrix_taichi[12*j + 9] * y +\
@@ -1156,17 +1181,18 @@ class Mgfbp:
             return True
     
     def InitializeArrays(self):
-        #计算数组u
-        self.GenerateDectPixPosArray(self.dect_elem_count_horizontal,self.dect_elem_count_horizontal,\
-                                     self.dect_elem_width,self.dect_offset_horizontal,self.array_u_taichi,0,False)
+        #calculate u array; by default, +u is along -y direction
+        #by convention, detector_offset_horizontal is along -y direction, we need to multiply -1. 
+        self.GenerateDectPixPosArray(self.dect_elem_count_horizontal,  self.dect_elem_count_horizontal,\
+                                     (self.positive_u_is_positive_y) *self.dect_elem_width, (-1) * self.dect_offset_horizontal,self.array_u_taichi, 0)
         #计算数组v
         if self.cone_beam == True:
             self.GenerateDectPixPosArray(self.dect_elem_count_vertical,self.dect_elem_count_vertical_actual,\
-                                         self.dect_elem_height,self.dect_offset_vertical,self.array_v_taichi,
-                                         self.dect_elem_vertical_recon_range_begin,self.first_slice_top_row)
+                                         (self.positive_v_is_positive_z) *self.dect_elem_height, self.dect_offset_vertical, self.array_v_taichi,
+                                         self.dect_elem_vertical_recon_range_begin)
         else:
             self.GenerateDectPixPosArray(self.dect_elem_count_vertical,self.dect_elem_count_vertical_actual,\
-                                         0,0,self.array_v_taichi,0,False)
+                                         0,0,self.array_v_taichi,0)
         #计算angle数组    
         self.GenerateAngleArray(self.view_num,self.img_rot,self.total_scan_angle,self.array_angle_taichi) 
         #img_rot is added to array_angle_taichi 
@@ -1256,8 +1282,10 @@ def ReadConfigFile(file_path):
     # print(json_data)
     return json_data
 
-def XuLeastSquareSolution(matrix_A,vec_y):
-    temp = np.matmul(np.linalg.inv(np.matmul(matrix_A.transpose(), matrix_A)), matrix_A.transpose())
+#get the least squared solution of Bx=y
+#basic principle is pseudo-inverse: x = (B^T*B)^{-1}*B^T*y
+def XuLeastSquareSolution(matrix_B,vec_y):
+    temp = np.matmul(np.linalg.inv(np.matmul(matrix_B.transpose(), matrix_B)), matrix_B.transpose())
     return np.matmul(temp,vec_y)
     
 

@@ -70,3 +70,9 @@ however, the code is not fully compatible with mgfpj.exe
 
 24-09-24
 fix bugs related to mgfbp_helical
+
+24-11-07
+unify the definition of array_u and array_v
+array_u is the coordinate along y direction
+array_v is the coordinate along z direction
+ATTENTION: detector offset horizontal is along -y by mgfbp.exe convention. We multiply it by -1 in the program

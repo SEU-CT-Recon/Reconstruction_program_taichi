@@ -32,7 +32,7 @@ from run_mgfbp import *
 PI = 3.1415926536
 
 
-def run_mgfpj(file_path):
+def run_mgfpj_v2(file_path):
     ti.reset()
     ti.init(arch=ti.gpu)
     print('Performing FPJ from MandoCT-Taichi (ver 0.2) ...')
@@ -73,27 +73,30 @@ class Mgfpj(Mgfbp):
         self.file_processed_count = 0
         self.GenerateAngleArray(
             self.view_num, self.img_rot, self.total_scan_angle, self.array_angle_taichi)
-        self.GenerateDectPixPosArrayFPJ(
-            self.dect_elem_count_vertical, - self.dect_elem_height, self.dect_offset_vertical, self.array_v_taichi)
-        self.GenerateDectPixPosArrayFPJ(self.dect_elem_count_horizontal*self.oversample_size, self.dect_elem_width/self.oversample_size,
-                                     self.dect_offset_horizontal, self.array_u_taichi)
+        self.GenerateDectPixPosArrayFPJ(self.dect_elem_count_vertical, - self.dect_elem_height, self.dect_offset_vertical, self.array_v_taichi)
+        self.GenerateDectPixPosArrayFPJ(self.dect_elem_count_horizontal*self.oversample_size, -self.dect_elem_width/self.oversample_size,
+                                     -self.dect_offset_horizontal, self.array_u_taichi) 
+        #array_v_taichi is the detector element coordinates along z
+        #array_u_taichi is the detector element coordinates along y
+        #self.dect_offset is from projection of rotation center to detector center
+        #self.dect_offset_horizontal along -y direction is positive as a convention from mgfbp.exe
+        #self.dect_offset_vertical along +z direction is positive 
+        #+u and +v direction are along -z and -y direction by convention 
 
         for file in os.listdir(self.input_dir):
             if re.match(self.input_files_pattern, file):
                 if self.ReadImage(file):
                     print('\nForward projecting %s ...' % self.input_path)
                     self.file_processed_count += 1
-                    for v_idx in range(self.dect_elem_count_vertical):
-
-                        str = 'Forward projecting slice: %4d/%4d' % (
-                            v_idx+1, self.dect_elem_count_vertical)
+                    for v_idx in range(self.dect_elem_vertical_recon_range_begin,self.dect_elem_vertical_recon_range_end+1):
+                        str = 'Forward projecting slice: %4d/%4d' % (v_idx+1, self.dect_elem_count_vertical)
                         print('\r' + str, end='')
                         self.ForwardProjectionBilinear(self.img_image_taichi, self.img_sgm_large_taichi, self.array_u_taichi,
                                                        self.array_v_taichi, self.array_angle_taichi, self.img_dim, self.img_dim_z,
                                                        self.dect_elem_count_horizontal*self.oversample_size,
                                                        self.dect_elem_count_vertical, self.view_num, self.img_pix_size, self.img_voxel_height,
                                                        self.source_isocenter_dis, self.source_dect_dis, self.cone_beam,
-                                                       self.helical_scan, self.helical_pitch, v_idx, self.fpj_step_size,
+                                                       self.helical_scan, self.helical_pitch, v_idx - self.dect_elem_vertical_recon_range_begin, self.fpj_step_size,
                                                        self.img_center_x, self.img_center_y, self.img_center_z, self.curved_dect,\
                                                        self.matrix_A_each_view_taichi,self.x_s_each_view_taichi,self.bool_apply_pmatrix)
 
@@ -144,6 +147,12 @@ class Mgfpj(Mgfbp):
             self.fpj_step_size = config_dict['ForwardProjectionStepSize']
         else:
             self.fpj_step_size = 0.2
+        
+        #we do not need to detector vertical recon range in fpj
+        #change the value to full detector range
+        # self.dect_elem_vertical_recon_range_begin = 0
+        # self.dect_elem_vertical_recon_range_end = self.dect_elem_count_vertical -1
+        # self.dect_elem_count_vertical_actual =  self.dect_elem_count_vertical
 
         ######### Helical Scan parameters ########
         if 'HelicalPitch' in config_dict:
@@ -187,6 +196,9 @@ class Mgfpj(Mgfbp):
         del self.img_recon
         del self.img_sgm_filtered_taichi
         del self.img_sgm_filtered_intermediate_taichi
+        del self.img_sgm
+        #re-initialize img_sgm with dect_elem_count_vertical, not dect_elem_count_vertical_actual
+        self.img_sgm = np.zeros((self.dect_elem_count_vertical, self.view_num, self.dect_elem_count_horizontal),dtype = np.float32)
         self.img_image = np.zeros(
             (self.img_dim_z, self.img_dim, self.img_dim), dtype=np.float32)
         self.array_u_taichi = ti.field(
@@ -199,7 +211,7 @@ class Mgfpj(Mgfbp):
             1, self.view_num, self.dect_elem_count_horizontal*self.oversample_size), order='ijk', needs_dual=True)
         self.img_sgm_taichi = ti.field(dtype=ti.f32, shape=(
             1, self.view_num, self.dect_elem_count_horizontal))
-        self.array_angle_taichi = ti.field(dtype=ti.f32, shape=self.view_num)
+        #self.array_angle_taichi = ti.field(dtype=ti.f32, shape=self.view_num)
         self.matrix_A_each_view_taichi = ti.field(dtype=ti.f32, shape=(9*self.view_num, 1))
         self.x_s_each_view_taichi = ti.field(dtype=ti.f32, shape=(3*self.view_num, 1))
         if self.bool_apply_pmatrix:
@@ -273,12 +285,12 @@ class Mgfpj(Mgfbp):
         # initialize detector element to source unit vector
         unit_vec_lambda_x = unit_vec_lambda_y = unit_vec_lambda_z = 0.0
         # lower range for the line integral
-        l_min = sid - (2 * img_dimension ** 2 +
+        l_min = sid - (2 * img_dimension ** 2 + 
                        image_dimension_z ** 2)**0.5 / 2.0
         # upper range for the line integral
-        l_max = sid + (2 * img_dimension ** 2 +
+        l_max = sid + (2 * img_dimension ** 2 + 
                        image_dimension_z ** 2)**0.5 / 2.0
-        voxel_diagonal_size = (2*(img_pix_size ** 2) +
+        voxel_diagonal_size = (2*(img_pix_size ** 2) + 
                                (img_voxel_height ** 2))**0.5
         sgm_val_lowerslice = sgm_val_upperslice = 0.0
 
@@ -298,14 +310,14 @@ class Mgfpj(Mgfbp):
 
             #caluclate the position of the detector element
             if self.curved_dect:
-                gamma_prime = (array_u_taichi[u_idx]) / sdd
+                gamma_prime = ( - array_u_taichi[u_idx]) / sdd #conterclockwise is positive, corresponding to -y direction
                 dect_elem_pos_x = -sdd * ti.cos(gamma_prime) + sid
                 # positive u direction is - y
-                dect_elem_pos_y = -sdd * ti.sin(gamma_prime)
+                dect_elem_pos_y = -sdd * ti.sin(gamma_prime)#negative gamma_prime corresponds to positive y
             else:
                 dect_elem_pos_x = - (sdd - sid)
                 # positive u direction is - y
-                dect_elem_pos_y = - array_u_taichi[u_idx]
+                dect_elem_pos_y = array_u_taichi[u_idx]
                 
             #add this distance to z position to simulate helical scan
             dect_elem_pos_z = array_v_taichi[v_idx] + z_dis_per_view * angle_idx
@@ -328,20 +340,26 @@ class Mgfpj(Mgfbp):
                 #for pmatrix case
                 #[x,y,z]^T = A * s * [u,v,1]^T + x_s^T
                 one_over_mag = (step_idx * fpj_step_size * voxel_diagonal_size + l_min) / source_dect_elem_dis
-                x_rot_p = one_over_mag * (matrix_A_each_view_taichi[angle_idx*9,0] * u_idx \
+                x_p = one_over_mag * (matrix_A_each_view_taichi[angle_idx*9,0] * u_idx \
                                         + matrix_A_each_view_taichi[angle_idx*9+1,0] * v_idx\
                                             + matrix_A_each_view_taichi[angle_idx*9+2,0] * 1) \
                                             + x_s_each_view_taichi[angle_idx*3,0]
-                y_rot_p = one_over_mag * (matrix_A_each_view_taichi[angle_idx*9+3,0] * u_idx \
+                y_p = one_over_mag * (matrix_A_each_view_taichi[angle_idx*9+3,0] * u_idx \
                                         + matrix_A_each_view_taichi[angle_idx*9+4,0] * v_idx\
                                             + matrix_A_each_view_taichi[angle_idx*9+5,0] * 1)\
                                             + x_s_each_view_taichi[angle_idx*3+1,0]
-                z_rot_p = one_over_mag * (matrix_A_each_view_taichi[angle_idx*9+6,0] * u_idx \
+                z_p = one_over_mag * (matrix_A_each_view_taichi[angle_idx*9+6,0] * u_idx \
                                         + matrix_A_each_view_taichi[angle_idx*9+7,0] * v_idx\
                                             + matrix_A_each_view_taichi[angle_idx*9+8,0] * 1)\
                                             + x_s_each_view_taichi[angle_idx*3+2,0] + z_dis_per_view * angle_idx
                                             # for helical scan, if the gantry stay stationary, the object moves downward
                                             # z coordinate of the projected area increases if helical pitch > 0
+                x_rot_p = x_p * ti.cos(array_angle_taichi[0]) - \
+                    y_p * ti.sin(array_angle_taichi[0])
+                y_rot_p = y_p * ti.cos(array_angle_taichi[0]) + \
+                    x_p * ti.sin(array_angle_taichi[0])#incorporate the image rotation angle into pmatrix
+                z_rot_p = z_p 
+                
                 #for none-pmatrix case                          
                 x = source_pos_x + unit_vec_lambda_x * \
                     (step_idx * fpj_step_size * voxel_diagonal_size + l_min)
