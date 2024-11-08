@@ -71,11 +71,7 @@ class Mgfpj(Mgfbp):
     def MainFunction(self):
 
         self.file_processed_count = 0
-        self.GenerateAngleArray(
-            self.view_num, self.img_rot, self.total_scan_angle, self.array_angle_taichi)
-        self.GenerateDectPixPosArrayFPJ(self.dect_elem_count_vertical, - self.dect_elem_height, self.dect_offset_vertical, self.array_v_taichi)
-        self.GenerateDectPixPosArrayFPJ(self.dect_elem_count_horizontal*self.oversample_size, -self.dect_elem_width/self.oversample_size,
-                                     -self.dect_offset_horizontal, self.array_u_taichi) 
+        self.InitializeArrays()#initialize arrays; inherit from mgfpj
         #array_v_taichi is the detector element coordinates along z
         #array_u_taichi is the detector element coordinates along y
         #self.dect_offset is from projection of rotation center to detector center
@@ -88,7 +84,7 @@ class Mgfpj(Mgfbp):
                 if self.ReadImage(file):
                     print('\nForward projecting %s ...' % self.input_path)
                     self.file_processed_count += 1
-                    for v_idx in range(self.dect_elem_vertical_recon_range_begin,self.dect_elem_vertical_recon_range_end+1):
+                    for v_idx in range(self.dect_elem_vertical_recon_range_begin,self.dect_elem_vertical_recon_range_end + 1):
                         str = 'Forward projecting slice: %4d/%4d' % (v_idx+1, self.dect_elem_count_vertical)
                         print('\r' + str, end='')
                         self.ForwardProjectionBilinear(self.img_image_taichi, self.img_sgm_large_taichi, self.array_u_taichi,
