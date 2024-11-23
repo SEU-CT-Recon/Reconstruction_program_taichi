@@ -159,10 +159,21 @@ class Mgfbp:
                 sys.exit()
         else: 
             self.input_file_form = "sinogram"
+            
+        #for mgfpj configs; be consistent
+        if 'OutputFileForm' in config_dict:
+            self.output_file_form = config_dict['OutputFileForm']
+            if self.output_file_form == 'sinogram' or self.output_file_form == 'post_log_images':
+                pass
+            else:
+                print("ERROR: OutputFileForm can only be sinogram or post_log_images!")
+                sys.exit()
+        else:
+            self.output_file_form = "sinogram"
         
         #NEW! define whether the first slice of the sinogram corresponds to the 
         #bottom detector row or the top row
-        if self.input_file_form == 'post_log_images':
+        if self.input_file_form == 'post_log_images' or self.output_file_form == 'post_log_images':
             self.first_slice_top_row = True 
             # if the input file form are in post_log_imgs
             # the images are NOT up-side-down

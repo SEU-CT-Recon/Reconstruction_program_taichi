@@ -1,5 +1,12 @@
 # -*- coding: utf-8 -*-
 """
+Created on Thu Nov 21 16:30:57 2024
+
+@author: xji
+"""
+
+# -*- coding: utf-8 -*-
+"""
 Created on Thu Oct 10 19:45:27 2024
 
 @author: xji
@@ -38,18 +45,17 @@ from crip.io import imwriteRaw
 from crip.io import imwriteTiff
 import time
 from run_mgfbp import *
-from run_mgfpj_v2 import *
+from run_mgfpj_v3 import *
 PI = 3.1415926536
 
 
-def run_mgfpj_v3(file_path):
+def run_mgfpj_nmwj(file_path):
     ti.reset()
     ti.init(arch=ti.gpu)
-    print('Performing FPJ from MandoCT-Taichi (ver 3.0) ...')
-    print('This new version of run_mgfpj inherits from run_mgfpj_v2.' )
-    print('Add PMatrix forward projection option.' )
-    print('View by view forward projection with arbitrary view angle and z posotion. ')
-    print('Is not fully compatible with mgfpj.exe. ')
+    print('Performing FPJ from MandoCT-Taichi (ver Namiweijing) ...')
+    print('This new version of run_mgfpj inherits from run_mgfpj_v3.' )
+    print('Curved Detector is with the isocenter as the center of the circle.' )
+    print('[Rather than the source as the center of the circle.]')
     # record start time point
     start_time = time.time()
     # Delete unnecessary warinings
@@ -60,7 +66,7 @@ def run_mgfpj_v3(file_path):
         # Judge whether the config jsonc file exist
         sys.exit()
     config_dict = ReadConfigFile(file_path)
-    fpj = Mgfpj_v3(config_dict)
+    fpj = Mgfpj_nmwj(config_dict)
     img_sgm = fpj.MainFunction()
     end_time = time.time()
     execution_time = end_time - start_time  
@@ -78,23 +84,19 @@ def run_mgfpj_v3(file_path):
 
 
 @ti.data_oriented
-class Mgfpj_v3(Mgfpj):
+class Mgfpj_nmwj(Mgfpj_v3):
     def MainFunction(self):
         self.file_processed_count = 0
         if not self.bool_uneven_scan_angle:
             self.GenerateAngleArray(
                 self.view_num, self.img_rot, self.total_scan_angle, self.array_angle_taichi)
-        self.GenerateDectPixPosArrayFPJ(self.dect_elem_count_vertical, - self.dect_elem_height, self.dect_offset_vertical, self.array_v_taichi)
+        self.GenerateDectPixPosArrayFPJ(self.dect_elem_count_vertical, -self.dect_elem_height, self.dect_offset_vertical, self.array_v_taichi)
         self.GenerateDectPixPosArrayFPJ(self.dect_elem_count_horizontal*self.oversample_size, -self.dect_elem_width/self.oversample_size,
                                      -self.dect_offset_horizontal, self.array_u_taichi)
         
         self.InitializeArrays()#initialize arrays; inherit from mgfpj
-        #array_v_taichi is the detector element coordinates along z
-        #array_u_taichi is the detector element coordinates along y
-        #self.dect_offset is from projection of rotation center to detector center
-        #self.dect_offset_horizontal along -y direction is positive as a convention from mgfbp.exe
-        #self.dect_offset_vertical along +z direction is positive 
-        #+u and +v direction are along -z and -y direction by convention 
+        if self.bool_uneven_scan_angle:
+            self.array_angle_taichi.from_numpy(self.array_angle) #overlay array_angle_taichi for uneven scan angle
 
         for file in os.listdir(self.input_dir):
             if re.match(self.input_files_pattern, file):
@@ -127,58 +129,7 @@ class Mgfpj_v3(Mgfpj):
         return self.img_sgm
 
     def __init__(self, config_dict):
-        super(Mgfpj_v3,self).__init__(config_dict)
-        if 'ScanAngleFile' in config_dict:
-            temp_dict = ReadConfigFile(config_dict['ScanAngleFile'])
-            if 'Value' in temp_dict:
-                self.array_angle = temp_dict['Value']
-                if not isinstance(self.array_angle,list):
-                    print('ERROR: ScanAngleFile.Value is not an array')
-                    sys.exit()
-                if len(self.array_angle) != self.view_num:
-                    print(f'ERROR: view number is {self.view_num:d} while ScanAngleFile has {len(self.array_angle):d} elements!')
-                    sys.exit()
-                self.array_angle = np.array(self.array_angle,dtype = np.float32) / 180.0 * PI + self.img_rot
-                self.array_angle_taichi.from_numpy(self.array_angle)
-                self.bool_uneven_scan_angle = 1
-                print("--Scan Angles From File")
-            else:
-                print("ERROR: ScanAngleFile has no member named 'Value'!")
-                sys.exit()
-        else:
-            self.bool_uneven_scan_angle = False
-            
-        self.array_img_center_z_taichi =  ti.field(dtype=ti.f32, shape = (1,self.view_num))
-        if 'ImageCenterZFile' in config_dict:
-            temp_dict = ReadConfigFile(config_dict['ImageCenterZFile'])
-            if 'Value' in temp_dict:
-                self.array_img_center_z = temp_dict['Value']
-                if not isinstance(self.array_img_center_z, list):
-                    print('ERROR: ImageCenterZFile.Value is not an array')
-                    sys.exit()
-                if len(self.array_img_center_z) != self.view_num:
-                    print(f'ERROR: view number is {self.view_num:d} while ImageCenterZFile has {len(self.array_img_center_z):d} elements!')
-                    sys.exit()
-                self.array_img_center_z = np.array(self.array_img_center_z, dtype = np.float32) 
-                self.array_img_center_z_taichi.from_numpy(self.array_img_center_z.reshape(1,self.view_num))
-                self.bool_image_center_z_from_file = True
-                print("--Image Center Z From File (defalt value is discarded)")
-            else:
-                print("ERROR: ImageCenterZFile has no member named 'Value'!")
-                sys.exit()
-        else:
-            self.array_img_center_z = np.ones(shape = (1,self.view_num), dtype = np.float32) * self.img_center_z
-            self.array_img_center_z_taichi.from_numpy(self.array_img_center_z)
-            self.bool_image_center_z_from_file = False
-            
-        del self.img_sgm_large_taichi
-        del self.img_sgm_taichi
-        del self.array_v_taichi
-        self.array_v_taichi = ti.field(dtype = ti.f32,shape = self.dect_elem_count_vertical)
-        self.img_sgm_large_taichi = ti.field(dtype=ti.f32, shape=(
-            self.dect_elem_count_vertical,self.dect_elem_count_horizontal*self.oversample_size))
-        self.img_sgm_taichi = ti.field(dtype=ti.f32, shape=(
-            self.dect_elem_count_vertical,self.dect_elem_count_horizontal))
+        super(Mgfpj_nmwj,self).__init__(config_dict)
         
 
     @ti.kernel
@@ -254,15 +205,11 @@ class Mgfpj_v3(Mgfpj):
         for u_idx, v_idx in ti.ndrange(dect_elem_count_horizontal_oversamplesize, dect_elem_count_vertical_actual):
             #v range from 0 to dect_elem_count_vertical_actual - 1
             #caluclate the position of the detector element
-            if self.curved_dect:
-                gamma_prime = ( - array_u_taichi[u_idx]) / sdd #conterclockwise is positive, corresponding to -y direction
-                dect_elem_pos_x = -sdd * ti.cos(gamma_prime) + sid
-                # positive u direction is - y
-                dect_elem_pos_y = -sdd * ti.sin(gamma_prime)#negative gamma_prime corresponds to positive y
-            else:
-                dect_elem_pos_x = - (sdd - sid)
-                # positive u direction is - y
-                dect_elem_pos_y = array_u_taichi[u_idx]
+
+            gamma_prime = ( - array_u_taichi[u_idx]) / (sdd - sid) #conterclockwise is positive, corresponding to -y direction
+            dect_elem_pos_x = - (sdd - sid) * ti.cos(gamma_prime)
+            # positive u direction is - y
+            dect_elem_pos_y = - (sdd - sid) * ti.sin(gamma_prime)#negative gamma_prime corresponds to positive y
                 
             #add this distance to z position to simulate helical scan
             dect_elem_pos_z = array_v_taichi[v_idx] + z_dis_per_view * angle_idx
@@ -363,28 +310,4 @@ class Mgfpj_v3(Mgfpj):
             img_sgm_large_taichi[v_idx + dect_elem_vertical_recon_range_begin, u_idx] = temp_sgm_val
             #incorporate the vertical recon range
 
-    @ti.kernel
-    def BinSinogram(self, img_sgm_large_taichi: ti.template(), img_sgm_taichi: ti.template(), dect_elem_count_horizontal: ti.i32,
-                    dect_elem_count_vertical: ti.i32, bin_size: ti.i32):
-        for v_idx, u_idx in ti.ndrange(dect_elem_count_vertical, dect_elem_count_horizontal):
-            img_sgm_taichi[v_idx, u_idx] = 0.0
-            for i in ti.ndrange(bin_size):
-                img_sgm_taichi[v_idx, u_idx] += img_sgm_large_taichi[v_idx, u_idx * bin_size + i]
-            img_sgm_taichi[v_idx, u_idx] /= bin_size
-
-
-    def TransferToRAM(self, view_idx):
-        self.img_sgm[:, view_idx, :] = self.img_sgm_taichi.to_numpy()
-
-    @ti.kernel
-    def AddPossionNoise(self, img_sgm_taichi: ti.template(), photon_number: ti.f32, dect_elem_count_horizontal: ti.i32,
-                        dect_elem_count_vertical: ti.i32):
-        for u_idx, v_idx in ti.ndrange(dect_elem_count_horizontal, dect_elem_count_vertical):
-            transmitted_photon_number = photon_number * \
-                ti.exp(-img_sgm_taichi[v_idx,u_idx])
-            transmitted_photon_number = transmitted_photon_number + \
-                ti.randn() * ti.sqrt(transmitted_photon_number)
-            if transmitted_photon_number <= 0:
-                transmitted_photon_number = 1e-6
-            img_sgm_taichi[v_idx,u_idx] = ti.log(photon_number / transmitted_photon_number)
 

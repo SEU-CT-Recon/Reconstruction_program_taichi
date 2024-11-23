@@ -55,8 +55,8 @@ def run_mgfbp_ir(file_path):
     
     print("Generating seed image from FBP ...")
     fbp =  Mgfbp(config_dict) #将config_dict数据以字典的形式送入对象中
-    #img_recon_seed = fbp.MainFunction() #generate a seed from fbp reconstruction
-    img_recon_seed = np.zeros((fbp.img_dim_z,fbp.img_dim, fbp.img_dim),dtype=np.float32)
+    img_recon_seed = fbp.MainFunction() #generate a seed from fbp reconstruction
+    #img_recon_seed = np.zeros((fbp.img_dim_z,fbp.img_dim, fbp.img_dim),dtype=np.float32)
     start_time = time.time()
     print("\nPerform Iterative Recon ...")
     fbp = Mgfbp_ir(config_dict) #将config_dict数据以字典的形式送入对象中
@@ -175,8 +175,8 @@ class Mgfbp_ir(Mgfpj_v3):
             self.GenerateAngleArray(
                 self.view_num, self.img_rot, self.total_scan_angle, self.array_angle_taichi)
         self.GenerateDectPixPosArrayFPJ(self.dect_elem_count_vertical, - self.dect_elem_height, self.dect_offset_vertical, self.array_v_taichi)
-        self.GenerateDectPixPosArrayFPJ(self.dect_elem_count_horizontal*self.oversample_size, self.dect_elem_width/self.oversample_size,
-                                     self.dect_offset_horizontal, self.array_u_taichi)
+        self.GenerateDectPixPosArrayFPJ(self.dect_elem_count_horizontal*self.oversample_size,-self.dect_elem_width/self.oversample_size,
+                                     -self.dect_offset_horizontal, self.array_u_taichi)
         self.file_processed_count = 0;#record the number of files processed
         for file in os.listdir(self.input_dir):
             if re.match(self.input_files_pattern, file):#match the file pattern
@@ -184,8 +184,8 @@ class Mgfbp_ir(Mgfpj_v3):
                     self.file_processed_count += 1 
                     print('Reconstructing %s ...' % self.input_path)
                     
-                    # if self.convert_to_HU:
-                    #     img_recon_seed = (img_recon_seed/1000 + 1 ) * self.water_mu
+                    if self.convert_to_HU:
+                          img_recon_seed = (img_recon_seed/1000 + 1 ) * self.water_mu
                     self.img_x = img_recon_seed
                     self.img_x_taichi.from_numpy(self.img_x)
                     
@@ -206,7 +206,7 @@ class Mgfbp_ir(Mgfpj_v3):
                                                     self.bool_apply_pmatrix,self.array_pmatrix_taichi, self.recon_view_mode, view_idx, self.img_x_truncation_flag_taichi)
                     self.SetTruncatedRegionToZero(self.img_bp_b_taichi,self.img_x_truncation_flag_taichi, self.img_dim, self.img_dim_z)
                     self.img_bp_b = self.img_bp_b_taichi.to_numpy()
-                    #imwriteRaw(self.img_bp_b,'img_bp_b.raw')
+                    imwriteRaw(self.img_bp_b,'img_bp_b.raw')
                     
                     for irn_iter_idx in range(self.num_irn_iter):
                         self.img_bp_fp_x_taichi.from_numpy(np.zeros_like(self.img_x))
@@ -220,7 +220,8 @@ class Mgfbp_ir(Mgfpj_v3):
                                                             self.source_isocenter_dis, self.source_dect_dis, self.cone_beam,
                                                             self.helical_scan, self.helical_pitch, view_idx, self.fpj_step_size,
                                                             self.img_center_x, self.img_center_y, self.array_img_center_z_taichi, self.curved_dect,
-                                                            self.matrix_A_each_view_taichi, self.x_s_each_view_taichi, self.bool_apply_pmatrix)
+                                                            self.matrix_A_each_view_taichi, self.x_s_each_view_taichi, self.bool_apply_pmatrix,\
+                                                            self.dect_elem_count_vertical_actual, self.dect_elem_vertical_recon_range_begin)
                             self.BackProjectionPixelDrivenPerView(self.dect_elem_count_vertical_actual, self.img_dim, self.dect_elem_count_horizontal, \
                                             self.view_num, self.dect_elem_width,self.img_pix_size, self.source_isocenter_dis, self.source_dect_dis,self.total_scan_angle,\
                                             self.array_angle_taichi, self.img_rot,self.img_fp_x_taichi_single_view,self.img_bp_fp_x_taichi,\
@@ -236,6 +237,9 @@ class Mgfbp_ir(Mgfpj_v3):
                         self.img_gradient_tv = self.GradientTVCalc(self.img_x, WR)
                         self.img_d = self.img_bp_b - self.img_bp_fp_x - self.coef_lambda * self.img_gradient_tv *self.pixel_count_ratio
                         self.img_r = self.img_d
+                        
+                        imwriteRaw(self.img_d,'img_d.raw')
+                        
                         loss = np.zeros(shape = [1,self.num_iter])
                         imaddRaw(self.img_gradient_tv, 'img_gradient_tv.raw', idx = irn_iter_idx)
                         for iter_idx in range(self.num_iter):
@@ -254,7 +258,8 @@ class Mgfbp_ir(Mgfpj_v3):
                                                                 self.source_isocenter_dis, self.source_dect_dis, self.cone_beam,
                                                                 self.helical_scan, self.helical_pitch, view_idx, self.fpj_step_size,
                                                                 self.img_center_x, self.img_center_y, self.array_img_center_z_taichi, self.curved_dect,
-                                                                self.matrix_A_each_view_taichi, self.x_s_each_view_taichi, self.bool_apply_pmatrix)
+                                                                self.matrix_A_each_view_taichi, self.x_s_each_view_taichi, self.bool_apply_pmatrix, \
+                                                                self.dect_elem_count_vertical_actual, self.dect_elem_vertical_recon_range_begin)
                                 self.BackProjectionPixelDrivenPerView(self.dect_elem_count_vertical_actual, self.img_dim, self.dect_elem_count_horizontal, \
                                                 self.view_num, self.dect_elem_width,self.img_pix_size, self.source_isocenter_dis, self.source_dect_dis,self.total_scan_angle,\
                                                 self.array_angle_taichi, self.img_rot,self.img_fp_d_taichi_single_view,self.img_bp_fp_d_taichi,\
@@ -268,8 +273,8 @@ class Mgfbp_ir(Mgfpj_v3):
                             self.img_bp_fp_d = self.img_bp_fp_d  + self.coef_lambda * self.GradientTVCalc(self.img_d, WR) * self.pixel_count_ratio
 
                             
-                            r_l2_norm = np.sum(np.multiply(self.img_r,self.img_r))
-                            alpha = r_l2_norm / np.sum(np.multiply(self.img_d, self.img_bp_fp_d)) 
+                            r_l2_norm = np.sum(np.multiply(self.img_r[10:self.img_dim_z-10,:,:],self.img_r[10:self.img_dim_z-10,:,:]))
+                            alpha = r_l2_norm / np.sum(np.multiply(self.img_d[10:self.img_dim_z-10,:,:], self.img_bp_fp_d[10:self.img_dim_z-10,:,:])) 
                             
                             if np.sqrt(r_l2_norm/ (self.img_dim**2 * self.img_dim_z)) / self.water_mu * 1000 < 1e-1:
                                 #print('\nIteration Terminated!')
@@ -278,13 +283,13 @@ class Mgfbp_ir(Mgfpj_v3):
                             self.img_x = self.img_x + np.multiply(alpha, self.img_d) 
                             self.img_r = self.img_r - np.multiply(alpha, self.img_bp_fp_d) 
                             
-                            beta = np.sum(np.multiply(self.img_r, self.img_r)) / r_l2_norm
+                            beta = np.sum(np.multiply(self.img_r[10:self.img_dim_z-10,:,:], self.img_r[10:self.img_dim_z-10,:,:])) / r_l2_norm
                             self.img_d = self.img_r + beta * self.img_d
                             
                             self.img_x_taichi.from_numpy(self.img_x)
                             self.img_d_taichi.from_numpy(self.img_d)
                             
-                            if iter_idx%1==0:
+                            if iter_idx%5==0:
                                 if self.convert_to_HU:
                                     plt.figure(dpi=300)
                                     plt.imshow((self.img_x[:,:,int(round(self.img_dim/2))]/ self.water_mu - 1)*1000,cmap = 'gray',vmin = -50, vmax = 100)
@@ -385,10 +390,10 @@ class Mgfbp_ir(Mgfpj_v3):
                 if bool_apply_pmatrix == 0:
                     mag_factor = source_dect_dis / pix_to_source_parallel_dis
                     if curved_dect:
-                        pix_proj_to_dect_u = source_dect_dis * ti.atan2(x*ti.sin(angle_this_view_exclude_img_rot)-y*ti.cos(angle_this_view_exclude_img_rot),pix_to_source_parallel_dis)
+                        pix_proj_to_dect_u =source_dect_dis * ti.atan2(-x*ti.sin(angle_this_view_exclude_img_rot)+y*ti.cos(angle_this_view_exclude_img_rot),pix_to_source_parallel_dis)
                     else:
-                        pix_proj_to_dect_u = mag_factor * (x*ti.sin(angle_this_view_exclude_img_rot)-y*ti.cos(angle_this_view_exclude_img_rot))
-                    pix_proj_to_dect_u_idx = (pix_proj_to_dect_u - array_u_taichi[0]) / dect_elem_width
+                        pix_proj_to_dect_u = mag_factor * (-x*ti.sin(angle_this_view_exclude_img_rot)+y*ti.cos(angle_this_view_exclude_img_rot))
+                    pix_proj_to_dect_u_idx = (pix_proj_to_dect_u - array_u_taichi[0]) / (array_u_taichi[1] - array_u_taichi[0])
                 else:
                     mag_factor = 1.0 / (array_pmatrix_taichi[12*view_idx + 8] * x +\
                         array_pmatrix_taichi[12*view_idx + 9] * y +\
@@ -399,8 +404,8 @@ class Mgfbp_ir(Mgfpj_v3):
                             array_pmatrix_taichi[12*view_idx + 2] * z +\
                                 array_pmatrix_taichi[12*view_idx + 3] * 1) * mag_factor
                 if pix_proj_to_dect_u_idx < 0 or  pix_proj_to_dect_u_idx + 1 > dect_elem_count_horizontal - 1:
-                    img_x_truncation_flag_taichi[i_z, i_y, i_x] =0.0 #mark the truncated region with -10000
-                    #img_recon_taichi[i_z, i_y, i_x] +=0.0
+                    img_x_truncation_flag_taichi[i_z, i_y, i_x] = 0.0 #mark the truncated region
+                    # img_recon_taichi[i_z, i_y, i_x] += 0.0
                 else:
                     temp_u_idx_floor = int(ti.floor(pix_proj_to_dect_u_idx))
                     ratio_u = pix_proj_to_dect_u_idx - temp_u_idx_floor

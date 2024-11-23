@@ -95,6 +95,7 @@ class Mgfpj(Mgfbp):
                                                        self.helical_scan, self.helical_pitch, v_idx - self.dect_elem_vertical_recon_range_begin, self.fpj_step_size,
                                                        self.img_center_x, self.img_center_y, self.img_center_z, self.curved_dect,\
                                                        self.matrix_A_each_view_taichi,self.x_s_each_view_taichi,self.bool_apply_pmatrix)
+                                                       #v_idx - self.dect_elem_vertical_recon_range_begin takes the recon vertical range into considertaion
 
                         self.BinSinogram(self.img_sgm_large_taichi, self.img_sgm_taichi,
                                          self.dect_elem_count_horizontal, self.view_num, self.oversample_size)
