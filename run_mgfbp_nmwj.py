@@ -102,13 +102,17 @@ class Mgfbp_nmwj(Mgfbp):
                        
         theta_tilde_num = 500; # can be modified
         for theta_tilde_idx in range(theta_tilde_num):
-            str_1 = 'Processing view #%4d/%4d' % (theta_tilde_idx+1, theta_tilde_num)
+            str_1 = 'Processing theta_filde idx #%4d/%4d' % (theta_tilde_idx+1, theta_tilde_num)
             print('\r' + str_1, end='')
             self.img_recon_per_view_taichi.from_numpy(np.zeros_like(self.img_recon))
             self.img_recon_weight_taichi.from_numpy(np.zeros_like(self.img_recon))
             for source_idx in range(24):
                 
                 angle_array = angle_array_total[:,source_idx]
+                theta_max = (angle_array[0] > angle_array[self.view_num-1]) * angle_array[0] +\
+                    (angle_array[0] < angle_array[self.view_num-1]) * angle_array[self.view_num-1]
+                theta_min = (angle_array[0] < angle_array[self.view_num-1]) * angle_array[0] +\
+                    (angle_array[0] > angle_array[self.view_num-1]) * angle_array[self.view_num-1]
                 self.array_angle_taichi.from_numpy(angle_array)
                 z_array = z_array_total[:,source_idx]
                 
@@ -131,7 +135,8 @@ class Mgfbp_nmwj(Mgfbp):
                                             self.array_v_taichi,self.img_dim_z,self.img_voxel_height,\
                                                 self.img_center_x,self.img_center_y,self.img_center_z,self.curved_dect,\
                                                     self.bool_apply_pmatrix,self.array_pmatrix_taichi, self.recon_view_mode, \
-                                                        view_idx_floor,z_source,PI / theta_tilde_num,dis_per_rad, self.img_recon_weight_taichi, 1-view_weight)
+                                                        view_idx_floor,z_source,PI / theta_tilde_num,dis_per_rad, self.img_recon_weight_taichi,
+                                                        1-view_weight, theta_max,theta_min)
                         
                         self.img_sgm_filtered_taichi.from_numpy(img_sgm_filtered_total[source_idx,:,view_idx_floor+1:view_idx_floor+2,:])
                         z_source =( view_idx_floor+1) * (angle_array[1] - angle_array[0]) * dis_per_rad + z_array[0]
@@ -144,7 +149,8 @@ class Mgfbp_nmwj(Mgfbp):
                                             self.array_v_taichi,self.img_dim_z,self.img_voxel_height,\
                                                 self.img_center_x,self.img_center_y,self.img_center_z,self.curved_dect,\
                                                     self.bool_apply_pmatrix,self.array_pmatrix_taichi, self.recon_view_mode, \
-                                                        view_idx_floor+1,z_source,PI / theta_tilde_num,dis_per_rad, self.img_recon_weight_taichi, view_weight)
+                                                        view_idx_floor+1,z_source,PI / theta_tilde_num,dis_per_rad, self.img_recon_weight_taichi,\
+                                                            view_weight,theta_max,theta_min)
                             
                             
                             
@@ -172,7 +178,7 @@ class Mgfbp_nmwj(Mgfbp):
         
         self.img_recon_taichi.from_numpy(self.img_recon) #initialize img_recon_taichi (all-zero array)
         
-        print('--Warning: Total scan angle from config file is discarded!')
+        print('--Warning: Total scan angle value from config file is discarded!')
 
         
     
@@ -235,24 +241,24 @@ class Mgfbp_nmwj(Mgfbp):
                                                       bool_apply_pmatrix:ti.i32, array_pmatrix_taichi:ti.template(), \
                                                           recon_view_mode: ti.i32, view_idx:ti.i32, z_source:ti.float32, \
                                                               delta_angle:ti.float32,dis_per_rad:ti.float32, img_recon_weight_taichi:ti.template(),\
-                                                                  view_weight:ti.f32):
+                                                                  view_weight:ti.f32, angle_max:ti.f32, angle_min: ti.f32):
         
 
         
         for i_x, i_y, i_z in ti.ndrange(img_dim, img_dim, img_dim_z):
             x_after_rot = 0.0; y_after_rot = 0.0; x=0.0; y=0.0;z=0.0;
-            if recon_view_mode == 1: #axial view (from bottom to top)
-                x_after_rot = img_pix_size * (i_x - (img_dim - 1) / 2.0) + img_center_x
-                y_after_rot = - img_pix_size * (i_y - (img_dim - 1) / 2.0) + img_center_y
-                z = (i_z - (img_dim_z - 1) / 2.0) * img_voxel_height + img_center_z
-            elif recon_view_mode == 2: #coronal view (from fron to back)
-                x_after_rot = img_pix_size * (i_x - (img_dim - 1) / 2.0) + img_center_x
-                z = - img_pix_size * (i_y - (img_dim - 1) / 2.0) + img_center_z
-                y_after_rot = - (i_z - (img_dim_z - 1) / 2.0) * img_voxel_height + img_center_y
-            elif recon_view_mode == 3: #sagittal view (from left to right)
-                z = - img_pix_size * (i_y - (img_dim - 1) / 2.0) + img_center_z
-                y_after_rot = - img_pix_size * (i_x - (img_dim - 1) / 2.0) + img_center_y
-                x_after_rot = (i_z - (img_dim_z - 1) / 2.0) * img_voxel_height + img_center_x
+            #if recon_view_mode == 1: #axial view (from bottom to top)
+            x_after_rot = img_pix_size * (i_x - (img_dim - 1) / 2.0) + img_center_x
+            y_after_rot = - img_pix_size * (i_y - (img_dim - 1) / 2.0) + img_center_y
+            z = (i_z - (img_dim_z - 1) / 2.0) * img_voxel_height + img_center_z
+            # elif recon_view_mode == 2: #coronal view (from fron to back)
+            #     x_after_rot = img_pix_size * (i_x - (img_dim - 1) / 2.0) + img_center_x
+            #     z = - img_pix_size * (i_y - (img_dim - 1) / 2.0) + img_center_z
+            #     y_after_rot = - (i_z - (img_dim_z - 1) / 2.0) * img_voxel_height + img_center_y
+            # elif recon_view_mode == 3: #sagittal view (from left to right)
+            #     z = - img_pix_size * (i_y - (img_dim - 1) / 2.0) + img_center_z
+            #     y_after_rot = - img_pix_size * (i_x - (img_dim - 1) / 2.0) + img_center_y
+            #     x_after_rot = (i_z - (img_dim_z - 1) / 2.0) * img_voxel_height + img_center_x
                 
             x = + x_after_rot * ti.cos(img_rot) + y_after_rot * ti.sin(img_rot)
             y = - x_after_rot * ti.sin(img_rot) + y_after_rot * ti.cos(img_rot)
@@ -263,10 +269,6 @@ class Mgfbp_nmwj(Mgfbp):
             
             #alpha is calculated to determine whether the data are from the extrapolated area
             alpha = theta + ti.asin(t / source_isocenter_dis)
-            angle_max = (array_angle_taichi[0] > array_angle_taichi[view_num-1]) * array_angle_taichi[0] +\
-                (array_angle_taichi[0] < array_angle_taichi[view_num-1]) * array_angle_taichi[view_num-1]
-            angle_min = (array_angle_taichi[0] < array_angle_taichi[view_num-1]) * array_angle_taichi[0] +\
-                (array_angle_taichi[0] > array_angle_taichi[view_num-1]) * array_angle_taichi[view_num-1]
             
             beta = ti.asin(t/source_isocenter_dis)
             l = source_isocenter_dis * ti.cos(beta) - x*ti.cos(theta) - y * ti.sin(theta)
@@ -279,11 +281,11 @@ class Mgfbp_nmwj(Mgfbp):
             u_idx_floor = int(ti.floor(u_idx))
             v_idx_floor = int(ti.floor(v_idx))
             
-            Q = 0.95
+            Q = 0.9
             w_q = 0.0
             if u_idx_floor >=0 and u_idx_floor <= dect_elem_count_horizontal-2 \
-                and v_idx_floor >=0 and v_idx_floor <= dect_elem_count_vertical_actual-2:
-                    #and alpha > angle_min and alpha < angle_max:
+                and v_idx_floor >=0 and v_idx_floor <= dect_elem_count_vertical_actual-2\
+                    and alpha > angle_min and alpha < angle_max:
                     q = v / array_v_taichi[0] # array_v_taichi[0] is the maximum value of array_v_taichi
                     if q > Q:
                         w_q = ti.cos(3.14159/2.0 * abs(v - Q)/(1-Q))**2
