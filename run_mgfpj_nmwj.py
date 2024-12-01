@@ -114,7 +114,8 @@ class Mgfpj_nmwj(Mgfpj_v3):
                                                        self.helical_scan, self.helical_pitch, view_idx, self.fpj_step_size,
                                                        self.img_center_x, self.img_center_y, self.array_img_center_z_taichi, self.curved_dect,\
                                                        self.matrix_A_each_view_taichi,self.x_s_each_view_taichi,self.bool_apply_pmatrix,\
-                                                       self.dect_elem_count_vertical_actual, self.dect_elem_vertical_recon_range_begin)
+                                                       self.dect_elem_count_vertical_actual, self.dect_elem_vertical_recon_range_begin,\
+                                                           self.array_source_pos_z_taichi)
 
                         self.BinSinogram(self.img_sgm_large_taichi, self.img_sgm_taichi,
                                          self.dect_elem_count_horizontal, self.dect_elem_count_vertical, self.oversample_size)
@@ -131,6 +132,29 @@ class Mgfpj_nmwj(Mgfpj_v3):
     def __init__(self, config_dict):
         super(Mgfpj_nmwj,self).__init__(config_dict)
         
+        self.array_source_pos_z_taichi =  ti.field(dtype=ti.f32, shape = (1,self.view_num))
+        if 'SourcePositionZFile' in config_dict:
+            temp_dict = ReadConfigFile(config_dict['SourcePositionZFile'])
+            if 'Value' in temp_dict:
+                self.array_source_pos_z = temp_dict['Value']
+                if not isinstance(self.array_source_pos_z, list):
+                    print('ERROR: SourcePositionZFile.Value is not an array')
+                    sys.exit()
+                if len(self.array_source_pos_z) != self.view_num:
+                    print(f'ERROR: view number is {self.view_num:d} while SourcePositionZFile has {len(self.array_source_pos_z):d} elements!')
+                    sys.exit()
+                self.array_source_pos_z = np.array(self.array_source_pos_z, dtype = np.float32) 
+                self.array_source_pos_z_taichi.from_numpy(self.array_source_pos_z.reshape(1,self.view_num))
+                self.bool_source_pos_z_from_file = True
+                print("--Source Position Z From File")
+            else:
+                print("ERROR: SourcePositionZFile has no member named 'Value'!")
+                sys.exit()
+        else:
+            self.array_source_pos_z = np.zeros(shape = (1,self.view_num), dtype = np.float32)
+            self.array_source_pos_z_taichi.from_numpy(self.array_source_pos_z)
+            self.bool_source_pos_z_from_file = False
+        
 
     @ti.kernel
     def ForwardProjectionBilinear(self, img_image_taichi: ti.template(), img_sgm_large_taichi: ti.template(),
@@ -143,7 +167,8 @@ class Mgfpj_nmwj(Mgfpj_v3):
                                   angle_idx: ti.i32, fpj_step_size: ti.f32, img_center_x: ti.f32,
                                   img_center_y: ti.f32, array_img_center_z_taichi: ti.template(), curved_dect: ti.i32, matrix_A_each_view_taichi: ti.template(),\
                                   x_s_each_view_taichi: ti.template(), bool_apply_pmatrix: ti.i32, \
-                                  dect_elem_count_vertical_actual: ti.i32, dect_elem_vertical_recon_range_begin:ti.i32):
+                                  dect_elem_count_vertical_actual: ti.i32, dect_elem_vertical_recon_range_begin:ti.i32, \
+                                      array_source_pos_z_taichi:ti.template()):
 
         # This new version of code assumes that the gantry stays stationary
         # while the image object rotates
@@ -172,7 +197,7 @@ class Mgfpj_nmwj(Mgfpj_v3):
         x_0 = - (img_dim - 1.0) / 2.0 * img_pix_size + img_center_x
         y_0 = - (img_dim - 1.0) / 2.0 * (- img_pix_size) + img_center_y
         # by default, the first slice corresponds to the bottom of the image object
-        z_0 = -(img_dim_z - 1.0) / 2.0 * img_voxel_height + array_img_center_z_taichi[0, angle_idx]
+        z_0 = -(img_dim_z - 1.0) / 2.0 * img_voxel_height + array_img_center_z_taichi[0,angle_idx]
 
         # initialize coordinate for the detector element
         dect_elem_pos_x = dect_elem_pos_y = dect_elem_pos_z = 0.0
@@ -212,9 +237,9 @@ class Mgfpj_nmwj(Mgfpj_v3):
             dect_elem_pos_y = - (sdd - sid) * ti.sin(gamma_prime)#negative gamma_prime corresponds to positive y
                 
             #add this distance to z position to simulate helical scan
-            dect_elem_pos_z = array_v_taichi[v_idx] + z_dis_per_view * angle_idx
+            dect_elem_pos_z = array_v_taichi[v_idx] + z_dis_per_view * angle_idx + array_source_pos_z_taichi[0,angle_idx]
             # assume that the source and the detector moves upward for a helical scan (pitch>0)
-            source_pos_z = z_dis_per_view * angle_idx
+            source_pos_z = z_dis_per_view * angle_idx + array_source_pos_z_taichi[0,angle_idx]
             #distance between the source and the detector element
             source_dect_elem_dis = ((dect_elem_pos_x - source_pos_x)**2 + (
                 dect_elem_pos_y - source_pos_y)**2 + (dect_elem_pos_z - source_pos_z)**2) ** 0.5

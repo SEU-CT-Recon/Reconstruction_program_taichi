@@ -338,10 +338,10 @@ class Mgfbp:
        
         if abs(self.total_scan_angle % (2 * PI)) < (0.01 / 180 * PI): 
             self.short_scan = 0
-            print('--Full scan, scan Angle = %.1f degrees' % (self.total_scan_angle / PI * 180))
+            print('--Full scan, scan angle = %.1f degrees' % (self.total_scan_angle / PI * 180))
         else:
             self.short_scan = 1
-            print('--Short scan, scan Angle = %.1f degrees' % (self.total_scan_angle / PI * 180))
+            print('--Short scan, scan angle = %.1f degrees' % (self.total_scan_angle / PI * 180))
             
         ######## NEW! Beam Hardening Correction Coefficients ########
         if 'BeamHardeningCorrectionCoefficients' in config_dict:
@@ -593,8 +593,8 @@ class Mgfbp:
                 #change the pmatrix source trajectory to standard form 
                 #(source positions will be on the z=0 plane with center at the origin)
                 #(source position for the first view will be on the +x axis)
-                if self.modify_pmatrix_to_standard_form:
-                    self.ChangePMatrix_SourceTrajectory()
+                #if self.modify_pmatrix_to_standard_form:
+                self.ChangePMatrix_SourceTrajectory()
                 #save the updated parameters values to the dictionary
                 config_dict['SourceIsocenterDistance'] = self.source_isocenter_dis
                 config_dict['SourceDetectorDistance'] = self.source_dect_dis
@@ -747,6 +747,10 @@ class Mgfbp:
         x_s_rec_final = np.matmul(rotation_matrix_z,x_s_rec_rot_shift_xyz)#final source positions
         rotation_matrix_total = np.matmul(rotation_matrix_z,np.matmul(rotation_matrix_x,rotation_matrix_y)) 
         #multiply three rotation operations together
+        
+        if self.modify_pmatrix_to_standard_form == False:
+            rotation_matrix_total = np.eye(3)
+            x_s_rec_final = x_s_rec
         
         v_center_rec = np.zeros(shape = (self.view_num,1))#array to record the center along v direction
         u_center_rec = np.zeros(shape = (self.view_num,1))#array to record the center along u direction

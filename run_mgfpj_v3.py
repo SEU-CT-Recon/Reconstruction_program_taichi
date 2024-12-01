@@ -141,7 +141,7 @@ class Mgfpj_v3(Mgfpj):
                 self.array_angle = np.array(self.array_angle,dtype = np.float32) / 180.0 * PI + self.img_rot
                 self.array_angle_taichi.from_numpy(self.array_angle)
                 self.bool_uneven_scan_angle = 1
-                print("--Scan Angles From File")
+                print("--Scan Angles From File (Original total scan angle value is discarded!)")
             else:
                 print("ERROR: ScanAngleFile has no member named 'Value'!")
                 sys.exit()

@@ -76,3 +76,7 @@ unify the definition of array_u and array_v
 array_u is the coordinate along y direction
 array_v is the coordinate along z direction
 ATTENTION: detector offset horizontal is along -y by mgfbp.exe convention. We multiply it by -1 in the program
+
+24-12-01
+fix bug related to modify pmatrix. Now if modify pmatrix is turned off, the detector offset vertical is also read from pmatrix file. 
+For dual source reconstruction, this option should be turned off. 

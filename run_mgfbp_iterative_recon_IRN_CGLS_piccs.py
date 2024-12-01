@@ -184,8 +184,15 @@ class Mgfbp_ir(Mgfpj_v3):
                     self.file_processed_count += 1 
                     print('Reconstructing %s ...' % self.input_path)
                     
+                    #read prior image
+                    img_prior = imreadRaw('./rec/img_prior.raw', width = self.img_dim, height = self.img_dim, nSlice = self.img_dim_z)
+                    img_prior = img_prior.reshape((self.img_dim_z,self.img_dim,self.img_dim))
+                    alpha_prior = 0.8
+                    
                     if self.convert_to_HU:
                           img_recon_seed = (img_recon_seed/1000 + 1 ) * self.water_mu
+                          img_prior = (img_prior/1000 + 1 ) * self.water_mu
+                    #img_recon_seed = np.zeros_like(img_prior)
                     self.img_x = img_recon_seed
                     self.img_x_taichi.from_numpy(self.img_x)
                     
@@ -234,14 +241,25 @@ class Mgfbp_ir(Mgfpj_v3):
                         #imwriteRaw(self.img_bp_fp_x,'img_bp_fp_x.raw')
                         
                         WR = self.GenerateWR(self.img_x,self.beta_tv)
-                        self.img_gradient_tv = self.GradientTVCalc(self.img_x, WR)
-                        self.img_d = self.img_bp_b - self.img_bp_fp_x - self.coef_lambda * self.img_gradient_tv *self.pixel_count_ratio
+                        img_DT_WR_D_x = self.GradientTVCalc(self.img_x, WR)
+                        WR_prior = self.GenerateWR(self.img_x - img_prior,self.beta_tv)
+                        img_DT_WRpiror_D_prior = self.GradientTVCalc(img_prior, WR_prior)
+                        img_DT_WRpiror_D_x = self.GradientTVCalc(self.img_x, WR_prior)
+                        
+                        
+                        self.img_d = self.img_bp_b + self.coef_lambda * alpha_prior*self.pixel_count_ratio*img_DT_WRpiror_D_prior\
+                            - self.img_bp_fp_x - self.coef_lambda* (alpha_prior)*img_DT_WRpiror_D_x * self.pixel_count_ratio \
+                                - self.coef_lambda* (1-alpha_prior)*img_DT_WR_D_x * self.pixel_count_ratio 
                         self.img_r = self.img_d
                         
-                        imwriteRaw(self.img_d,'img_d.raw')
+                        # imwriteRaw(img_DT_WR_D_x,'img_DT_WR_D_x.raw')
+                        # imwriteRaw(self.img_x,'img_x.raw')
+                        
+                        
+                        # imwriteRaw(self.img_d,'img_d.raw')
                         
                         loss = np.zeros(shape = [1,self.num_iter])
-                        imaddRaw(self.img_gradient_tv, 'img_gradient_tv.raw', idx = irn_iter_idx)
+                        #imaddRaw(self.img_DT_WR_D_x, 'img_DT_WR_D_x.raw', idx = irn_iter_idx)
                         for iter_idx in range(self.num_iter):
                             #P^T P d
                             self.img_bp_fp_d_taichi.from_numpy(np.zeros_like(self.img_x))
@@ -249,7 +267,7 @@ class Mgfbp_ir(Mgfpj_v3):
                             for view_idx in range(self.view_num): 
                                 str_0 = 'Running IRN iterations: %4d/%4d; ' % (irn_iter_idx+1, self.num_irn_iter)
                                 str_1 = 'Running iterations: %4d/%4d; ' % (iter_idx+1, self.num_iter)
-                                str_2= 'FPJ and BP view: %4d/%4d' % (view_idx+1, self.view_num)
+                                str_2 = 'FPJ and BP view: %4d/%4d' % (view_idx+1, self.view_num)
                                 print('\r' + str_0 + str_1 + str_2, end='')
                                 self.ForwardProjectionBilinear(self.img_d_taichi, self.img_fp_d_taichi_single_view, self.array_u_taichi,
                                                                 self.array_v_taichi, self.array_angle_taichi, self.img_dim, self.img_dim_z,
@@ -270,7 +288,8 @@ class Mgfbp_ir(Mgfpj_v3):
                             self.SetTruncatedRegionToZero(self.img_bp_fp_d_taichi,self.img_x_truncation_flag_taichi, self.img_dim, self.img_dim_z)
                             self.img_bp_fp_d = self.img_bp_fp_d_taichi.to_numpy()
                             #imwriteRaw(self.img_bp_fp_d,'img_bp_fp_d.raw')
-                            self.img_bp_fp_d = self.img_bp_fp_d  + self.coef_lambda * self.GradientTVCalc(self.img_d, WR) * self.pixel_count_ratio
+                            self.img_bp_fp_d = self.img_bp_fp_d  + self.coef_lambda *(alpha_prior) * self.GradientTVCalc(self.img_d, WR_prior) * self.pixel_count_ratio\
+                                + self.coef_lambda *(1-alpha_prior)* self.GradientTVCalc(self.img_d, WR) * self.pixel_count_ratio
 
                             
                             r_l2_norm = np.sum(np.multiply(self.img_r,self.img_r))
