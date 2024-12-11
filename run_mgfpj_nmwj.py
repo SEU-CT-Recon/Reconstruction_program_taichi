@@ -132,7 +132,7 @@ class Mgfpj_nmwj(Mgfpj_v3):
     def __init__(self, config_dict):
         super(Mgfpj_nmwj,self).__init__(config_dict)
         
-        self.array_source_pos_z_taichi =  ti.field(dtype=ti.f32, shape = (1,self.view_num))
+        self.array_source_pos_z_taichi =  ti.field(dtype=ti.f32, shape = self.view_num)
         if 'SourcePositionZFile' in config_dict:
             temp_dict = ReadConfigFile(config_dict['SourcePositionZFile'])
             if 'Value' in temp_dict:
@@ -144,14 +144,14 @@ class Mgfpj_nmwj(Mgfpj_v3):
                     print(f'ERROR: view number is {self.view_num:d} while SourcePositionZFile has {len(self.array_source_pos_z):d} elements!')
                     sys.exit()
                 self.array_source_pos_z = np.array(self.array_source_pos_z, dtype = np.float32) 
-                self.array_source_pos_z_taichi.from_numpy(self.array_source_pos_z.reshape(1,self.view_num))
+                self.array_source_pos_z_taichi.from_numpy(self.array_source_pos_z.reshape(self.view_num))
                 self.bool_source_pos_z_from_file = True
                 print("--Source Position Z From File")
             else:
                 print("ERROR: SourcePositionZFile has no member named 'Value'!")
                 sys.exit()
         else:
-            self.array_source_pos_z = np.zeros(shape = (1,self.view_num), dtype = np.float32)
+            self.array_source_pos_z = np.zeros(shape = (self.view_num), dtype = np.float32)
             self.array_source_pos_z_taichi.from_numpy(self.array_source_pos_z)
             self.bool_source_pos_z_from_file = False
         
@@ -237,9 +237,9 @@ class Mgfpj_nmwj(Mgfpj_v3):
             dect_elem_pos_y = - (sdd - sid) * ti.sin(gamma_prime)#negative gamma_prime corresponds to positive y
                 
             #add this distance to z position to simulate helical scan
-            dect_elem_pos_z = array_v_taichi[v_idx] + z_dis_per_view * angle_idx + array_source_pos_z_taichi[0,angle_idx]
+            dect_elem_pos_z = array_v_taichi[v_idx] + z_dis_per_view * angle_idx + array_source_pos_z_taichi[angle_idx]
             # assume that the source and the detector moves upward for a helical scan (pitch>0)
-            source_pos_z = z_dis_per_view * angle_idx + array_source_pos_z_taichi[0,angle_idx]
+            source_pos_z = z_dis_per_view * angle_idx + array_source_pos_z_taichi[angle_idx]
             #distance between the source and the detector element
             source_dect_elem_dis = ((dect_elem_pos_x - source_pos_x)**2 + (
                 dect_elem_pos_y - source_pos_y)**2 + (dect_elem_pos_z - source_pos_z)**2) ** 0.5
@@ -256,26 +256,26 @@ class Mgfpj_nmwj(Mgfpj_v3):
                 
                 #for pmatrix case
                 #[x,y,z]^T = A * s * [u,v,1]^T + x_s^T
-                one_over_mag = (step_idx * fpj_step_size * voxel_diagonal_size + l_min) / source_dect_elem_dis
-                x_p = one_over_mag * (matrix_A_each_view_taichi[angle_idx*9,0] * u_idx \
-                                        + matrix_A_each_view_taichi[angle_idx*9+1,0] * v_idx\
-                                            + matrix_A_each_view_taichi[angle_idx*9+2,0] * 1) \
-                                            + x_s_each_view_taichi[angle_idx*3,0]
-                y_p = one_over_mag * (matrix_A_each_view_taichi[angle_idx*9+3,0] * u_idx \
-                                        + matrix_A_each_view_taichi[angle_idx*9+4,0] * v_idx\
-                                            + matrix_A_each_view_taichi[angle_idx*9+5,0] * 1)\
-                                            + x_s_each_view_taichi[angle_idx*3+1,0]
-                z_p = one_over_mag * (matrix_A_each_view_taichi[angle_idx*9+6,0] * u_idx \
-                                        + matrix_A_each_view_taichi[angle_idx*9+7,0] * v_idx\
-                                            + matrix_A_each_view_taichi[angle_idx*9+8,0] * 1)\
-                                            + x_s_each_view_taichi[angle_idx*3+2,0] + z_dis_per_view * angle_idx
-                                            # for helical scan, if the gantry stay stationary, the object moves downward
-                                            # z coordinate of the projected area increases if helical pitch > 0
-                x_rot_p = x_p * ti.cos(array_angle_taichi[0]) - \
-                    y_p * ti.sin(array_angle_taichi[0])
-                y_rot_p = y_p * ti.cos(array_angle_taichi[0]) + \
-                    x_p * ti.sin(array_angle_taichi[0])#incorporate the image rotation angle into pmatrix
-                z_rot_p = z_p 
+                # one_over_mag = (step_idx * fpj_step_size * voxel_diagonal_size + l_min) / source_dect_elem_dis
+                # x_p = one_over_mag * (matrix_A_each_view_taichi[angle_idx*9,0] * u_idx \
+                #                         + matrix_A_each_view_taichi[angle_idx*9+1,0] * v_idx\
+                #                             + matrix_A_each_view_taichi[angle_idx*9+2,0] * 1) \
+                #                             + x_s_each_view_taichi[angle_idx*3,0]
+                # y_p = one_over_mag * (matrix_A_each_view_taichi[angle_idx*9+3,0] * u_idx \
+                #                         + matrix_A_each_view_taichi[angle_idx*9+4,0] * v_idx\
+                #                             + matrix_A_each_view_taichi[angle_idx*9+5,0] * 1)\
+                #                             + x_s_each_view_taichi[angle_idx*3+1,0]
+                # z_p = one_over_mag * (matrix_A_each_view_taichi[angle_idx*9+6,0] * u_idx \
+                #                         + matrix_A_each_view_taichi[angle_idx*9+7,0] * v_idx\
+                #                             + matrix_A_each_view_taichi[angle_idx*9+8,0] * 1)\
+                #                             + x_s_each_view_taichi[angle_idx*3+2,0] + z_dis_per_view * angle_idx
+                #                             # for helical scan, if the gantry stay stationary, the object moves downward
+                #                             # z coordinate of the projected area increases if helical pitch > 0
+                # x_rot_p = x_p * ti.cos(array_angle_taichi[0]) - \
+                #     y_p * ti.sin(array_angle_taichi[0])
+                # y_rot_p = y_p * ti.cos(array_angle_taichi[0]) + \
+                #     x_p * ti.sin(array_angle_taichi[0])#incorporate the image rotation angle into pmatrix
+                # z_rot_p = z_p 
                 
                 #for none-pmatrix case                          
                 x = source_pos_x + unit_vec_lambda_x * \
@@ -290,9 +290,13 @@ class Mgfpj_nmwj(Mgfpj_v3):
                     x * ti.sin(array_angle_taichi[angle_idx])
                 z_rot_np = z
                 
-                x_rot = x_rot_p * bool_apply_pmatrix + x_rot_np *(1 - bool_apply_pmatrix)
-                y_rot = y_rot_p * bool_apply_pmatrix + y_rot_np *(1 - bool_apply_pmatrix)
-                z_rot = z_rot_p * bool_apply_pmatrix + z_rot_np *(1 - bool_apply_pmatrix)
+                # x_rot = x_rot_p * bool_apply_pmatrix + x_rot_np *(1 - bool_apply_pmatrix)
+                # y_rot = y_rot_p * bool_apply_pmatrix + y_rot_np *(1 - bool_apply_pmatrix)
+                # z_rot = z_rot_p * bool_apply_pmatrix + z_rot_np *(1 - bool_apply_pmatrix)
+                
+                x_rot = x_rot_np
+                y_rot = y_rot_np
+                z_rot = z_rot_np
                 
                 x_idx = int(ti.floor((x_rot - x_0) / img_pix_size))
                 y_idx = int(ti.floor((y_rot - y_0) / (- img_pix_size)))
@@ -303,34 +307,26 @@ class Mgfpj_nmwj(Mgfpj_v3):
                     y_weight = (
                         y_rot - (y_idx * (- img_pix_size) + y_0)) / (- img_pix_size)
 
-                    if self.cone_beam:
-                        z_idx = int(ti.floor((z_rot - z_0) / img_voxel_height))
+                    z_idx = int(ti.floor((z_rot - z_0) / img_voxel_height))
 
-                        if z_idx >= 0 and z_idx + 1 < img_dim_z:
-                            z_weight = (
-                                z_rot - (z_idx * img_voxel_height + z_0)) / img_voxel_height
-                            sgm_val_lowerslice = (1.0 - x_weight) * (1.0 - y_weight) * img_image_taichi[z_idx, y_idx, x_idx]\
-                                + x_weight * (1.0 - y_weight) * img_image_taichi[z_idx, y_idx, x_idx+1]\
-                                + (1.0 - x_weight) * y_weight * img_image_taichi[z_idx, y_idx+1, x_idx]\
-                                + x_weight * y_weight * \
-                                img_image_taichi[z_idx, y_idx+1, x_idx + 1]
-                            sgm_val_upperslice = (1.0 - x_weight) * (1.0 - y_weight) * img_image_taichi[z_idx + 1, y_idx, x_idx]\
-                                + x_weight * (1.0 - y_weight) * img_image_taichi[z_idx + 1, y_idx, x_idx+1]\
-                                + (1.0 - x_weight) * y_weight * img_image_taichi[z_idx + 1, y_idx+1, x_idx]\
-                                + x_weight * y_weight * \
-                                img_image_taichi[z_idx + 1, y_idx+1, x_idx + 1]
-                            temp_sgm_val += ((1.0 - z_weight) * sgm_val_lowerslice + z_weight *
-                                             sgm_val_upperslice) * fpj_step_size * voxel_diagonal_size
-                        else:
-                            temp_sgm_val += 0.0
-                    else:
-                        z_idx = v_idx
-                        sgm_val = (1 - x_weight) * (1 - y_weight) * img_image_taichi[z_idx, y_idx, x_idx]\
-                            + x_weight * (1 - y_weight) * img_image_taichi[z_idx, y_idx, x_idx+1]\
-                            + (1 - x_weight) * y_weight * img_image_taichi[z_idx, y_idx+1, x_idx]\
+                    if z_idx >= 0 and z_idx + 1 < img_dim_z:
+                        z_weight = (
+                            z_rot - (z_idx * img_voxel_height + z_0)) / img_voxel_height
+                        sgm_val_lowerslice = (1.0 - x_weight) * (1.0 - y_weight) * img_image_taichi[z_idx, y_idx, x_idx]\
+                            + x_weight * (1.0 - y_weight) * img_image_taichi[z_idx, y_idx, x_idx+1]\
+                            + (1.0 - x_weight) * y_weight * img_image_taichi[z_idx, y_idx+1, x_idx]\
                             + x_weight * y_weight * \
                             img_image_taichi[z_idx, y_idx+1, x_idx + 1]
-                        temp_sgm_val += sgm_val * fpj_step_size * voxel_diagonal_size
+                        sgm_val_upperslice = (1.0 - x_weight) * (1.0 - y_weight) * img_image_taichi[z_idx + 1, y_idx, x_idx]\
+                            + x_weight * (1.0 - y_weight) * img_image_taichi[z_idx + 1, y_idx, x_idx+1]\
+                            + (1.0 - x_weight) * y_weight * img_image_taichi[z_idx + 1, y_idx+1, x_idx]\
+                            + x_weight * y_weight * \
+                            img_image_taichi[z_idx + 1, y_idx+1, x_idx + 1]
+                        temp_sgm_val += ((1.0 - z_weight) * sgm_val_lowerslice + z_weight *
+                                         sgm_val_upperslice) * fpj_step_size * voxel_diagonal_size
+                    else:
+                        temp_sgm_val += 0.0
+                    
 
             img_sgm_large_taichi[v_idx + dect_elem_vertical_recon_range_begin, u_idx] = temp_sgm_val
             #incorporate the vertical recon range

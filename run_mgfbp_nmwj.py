@@ -62,15 +62,15 @@ class Mgfbp_nmwj(Mgfbp):
         #Main function for reconstruction
         self.img_recon_weight_taichi = ti.field(dtype=ti.f32, shape=(self.img_dim_z,self.img_dim, self.img_dim),order='ikj')
         self.img_recon_per_view_taichi = ti.field(dtype=ti.f32, shape=(self.img_dim_z,self.img_dim, self.img_dim),order='ikj')
-        self.img_recon_weight = np.zeros_like(self.img_recon)
-        self.img_recon_per_view = np.zeros_like(self.img_recon)
+        self.img_recon_weight = np.zeros_like(self.img_recon, dtype = np.float32)
+        self.img_recon_per_view = np.zeros_like(self.img_recon, dtype = np.float32)
         
         self.positive_u_is_positive_y = 1
         self.InitializeArrays()#initialize arrays
         self.InitializeReconKernel()#initialize reconstruction kernel
         self.file_processed_count = 0;#record the number of files processed
         self.file_processed_count = 1
-        img_sgm_filtered_total = np.zeros(shape = (24,self.dect_elem_count_vertical,self.view_num,self.dect_elem_count_horizontal))
+        img_sgm_filtered_total = np.zeros(shape = (24,self.dect_elem_count_vertical,self.view_num,self.dect_elem_count_horizontal), dtype = np.float32)
         for source_idx in range(24):
             file = 'sgm_rebin_'+str(source_idx + 1)+'.raw'
             if self.ReadSinogram(file):
@@ -83,8 +83,8 @@ class Mgfbp_nmwj(Mgfbp):
         print('\r')
         
         #read angles and source_z_pos
-        angle_array_total = np.zeros(shape = (self.view_num,24))
-        z_array_total = np.zeros(shape = (self.view_num,24))
+        angle_array_total = np.zeros(shape = (self.view_num,24),dtype = np.float32)
+        z_array_total = np.zeros(shape = (self.view_num,24),dtype = np.float32)
         for source_idx in range(24):
             angle_array_dict = load_jsonc(self.input_dir + '/angle_'+str(source_idx+1)+'.jsonc')
             angle_array = angle_array_dict.get("Value")
@@ -100,12 +100,12 @@ class Mgfbp_nmwj(Mgfbp):
         M_min = int(np.floor(angle_min/PI))
         M_max = int(np.ceil(angle_max/PI))
                        
-        theta_tilde_num = 500; # can be modified
+        theta_tilde_num = 400; # can be modified
         for theta_tilde_idx in range(theta_tilde_num):
             str_1 = 'Processing theta_filde idx #%4d/%4d' % (theta_tilde_idx+1, theta_tilde_num)
             print('\r' + str_1, end='')
-            self.img_recon_per_view_taichi.from_numpy(np.zeros_like(self.img_recon))
-            self.img_recon_weight_taichi.from_numpy(np.zeros_like(self.img_recon))
+            self.img_recon_per_view_taichi.from_numpy(np.zeros_like(self.img_recon, dtype = np.float32))
+            self.img_recon_weight_taichi.from_numpy(np.zeros_like(self.img_recon, dtype = np.float32))
             for source_idx in range(24):
                 
                 angle_array = angle_array_total[:,source_idx]
