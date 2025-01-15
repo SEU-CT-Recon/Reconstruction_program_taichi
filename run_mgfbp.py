@@ -68,8 +68,7 @@ class Mgfbp:
                     print('Filtering sinogram ...')
                     self.FilterSinogram()
                     self.SaveFilteredSinogram()
-                    
-                    
+                                        
                     print('Back Projection ...')
                     self.BackProjectionPixelDriven(self.dect_elem_count_vertical_actual, self.img_dim, self.dect_elem_count_horizontal, \
                                     self.view_num, self.dect_elem_width,self.img_pix_size, self.source_isocenter_dis, self.source_dect_dis,self.total_scan_angle,\
@@ -562,7 +561,7 @@ class Mgfbp:
                         print("ERROR: ModifyPMatrixToStandardForm must be True or False!")
                         sys.exit();
                 else:
-                    self.modify_pmatrix_to_standard_form = True # true by default
+                    self.modify_pmatrix_to_standard_form = False # false by default, since only data from Wandong requires pmatrix file modification
                 
                 ## Change the projection matrix Values if a different detector binning is applied for obj CT scan
                 ## compared with the binning mode for pmatrix
@@ -590,11 +589,15 @@ class Mgfbp:
                 else:
                     self.pmatrix_elem_height = self.dect_elem_height;
                 
-                #change the pmatrix source trajectory to standard form 
+                
+                self.ChangePMatrix_SourceTrajectory() 
+                #if self.modify_pmatrix_to_standard_form
+                #this function will change the pmatrix source trajectory to standard form 
                 #(source positions will be on the z=0 plane with center at the origin)
                 #(source position for the first view will be on the +x axis)
-                #if self.modify_pmatrix_to_standard_form:
-                self.ChangePMatrix_SourceTrajectory()
+                #if not, this function will output the parameters from pmatrix
+                #the parmaters include: source_isocenter_dis,source_dect_dis, 
+                #dect_offset_horizontal, dect_offset_vertical and total_scan_angle. 
                 #save the updated parameters values to the dictionary
                 config_dict['SourceIsocenterDistance'] = self.source_isocenter_dis
                 config_dict['SourceDetectorDistance'] = self.source_dect_dis
@@ -749,6 +752,7 @@ class Mgfbp:
         #multiply three rotation operations together
         
         if self.modify_pmatrix_to_standard_form == False:
+            #if we do not want to modify the pmatrix, rotation_matrix_total is set to be an identity matrix
             rotation_matrix_total = np.eye(3)
             x_s_rec_final = x_s_rec
         
@@ -1257,6 +1261,7 @@ class Mgfbp:
             imwriteRaw(self.img_recon,self.output_path,dtype=np.float32)
         elif self.output_file_format == 'tif' or self.output_file_format == 'tiff':
             imwriteTiff(self.img_recon, self.output_path,dtype=np.float32)
+        self.img_recon_taichi.from_numpy(np.zeros_like(self.img_recon))
     
     
 def remove_comments(jsonc_str):
