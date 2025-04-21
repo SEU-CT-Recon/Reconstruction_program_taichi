@@ -798,6 +798,7 @@ class Mgfbp:
             pmatrix_this_view = np.append(matrix_A_inverse, -np.matmul(matrix_A_inverse,x_s), axis = 1)#get the new pmatrix for this view
             u_center_rec[view_idx, 0]= pmatrix_this_view[0,3] / pmatrix_this_view[2,3]#get center of the pixel along u direction
             v_center_rec[view_idx, 0]= pmatrix_this_view[1,3] / pmatrix_this_view[2,3]#get center of the pixel along v direction
+            v_center_rec[view_idx, 0]= -np.dot(x_do_x_s,e_v)/(self.pmatrix_elem_height**2)  #get center of the pixel along v direction
             x_d_center_x_s_rec_final[:,view_idx:view_idx+1] = x_do_x_s.reshape((3,1)) + \
                 u_center_rec[view_idx, 0] * e_u.reshape((3,1)) + v_center_rec[view_idx, 0] * e_v.reshape((3,1))
             
@@ -947,7 +948,7 @@ class Mgfbp:
                     img_sgm_taichi[s,i,j]=(img_sgm_taichi[s,i,j] * source_dect_dis * source_dect_dis ) \
                         / (( source_dect_dis **2 + u_actual**2 + v_actual **2) ** 0.5)
                 if short_scan:
-                    #for scans longer than 360 degrees but not muliples of 360, we also need to apply parker weighting
+                    #for scans longer than 360 degrees but not multiples of 360, we also need to apply parker weighting
                     #for example, for a 600 degrees scan, we also need to apply parker weighting
                     num_rounds = ti.floor(abs(scan_angle) / (PI * 2))
                     remain_angle = abs(scan_angle) - num_rounds * PI * 2
@@ -1286,7 +1287,7 @@ def imreadRaw(path: str, height: int, width: int, dtype = np.float32, nSlice: in
     with open(path, 'rb') as fp:
         fp.seek(offset)
         if gap == 0:
-            arr = np.frombuffer(fp.read(), dtype = dtype,count = nSlice * height * width).reshape((nSlice, height, width)).squeeze()
+            arr = np.frombuffer(fp.read(), dtype = dtype,count = nSlice * height * width).reshape((nSlice, height, width))
         else:
             imageBytes = height * width * np.dtype(dtype).itemsize
             arr = np.zeros((nSlice, height, width), dtype=dtype)

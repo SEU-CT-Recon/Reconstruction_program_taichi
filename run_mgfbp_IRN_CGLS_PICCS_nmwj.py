@@ -100,7 +100,7 @@ class Mgfbp_ir_piccs_nmwj(Mgfbp_ir_piccs):
         self.view_num = self.view_num * num_source
         self.img_fp_effective_map = self.GenEffectiveMapForwardProjection(self.img_x)
         
-        #imwriteTiff(self.img_fp_effective_map.transpose(1,0,2),'img_fp_effective_map.tif')
+        imwriteTiff(self.img_fp_effective_map.transpose(1,0,2),'img_fp_effective_map.tif')
         
         
         self.img_x = self.img_prior
@@ -111,12 +111,13 @@ class Mgfbp_ir_piccs_nmwj(Mgfbp_ir_piccs):
         #imwriteTiff(self.ForwardProjection(self.img_x).transpose(1,0,2),'img_fp_x.tif')
         # P^T b
         self.img_bp_b = self.BackProjection(self.img_sgm)
-        #imwriteTiff(self.img_bp_b,'img_bp_b.tif')
+        imwriteTiff(self.img_bp_b,'img_bp_b.tif')
         
         WR = np.ones_like(self.img_x)
         WR_prior = np.ones_like(self.img_x)
         self.img_x = self.TikhonovSol(self.img_x,WR,WR_prior,-1)
         self.SaveLossValAndPlot()
+        self.SaveReconImg()
         for irn_iter_idx in range(self.num_irn_iter):  
             WR = self.GenerateWR(self.img_x,self.beta_tv)
             WR_prior = self.GenerateWR(self.img_x - self.img_prior, self.beta_tv)
@@ -183,7 +184,7 @@ class Mgfbp_ir_piccs_nmwj(Mgfbp_ir_piccs):
         self.img_d = self.img_bp_b + self.coef_lambda * self.coef_alpha*self.pixel_count_ratio * self.Dt_W_D(self.img_prior, WR_prior)\
             - self.FunctionFx(img_seed,WR, WR_prior)
         self.img_r = self.img_d
-        #imwriteTiff(self.img_d, 'img_d.tif')
+        imwriteTiff(self.img_d, 'img_d.tif')
         #imwriteTiff(self.img_bp_b - self.img_d, 'img_f_x.tif')
         for iter_idx in range(self.num_iter):
             #P^T P d
@@ -510,8 +511,10 @@ class Mgfbp_ir_piccs_nmwj(Mgfbp_ir_piccs):
                 y_idx = int(ti.floor((y_rot - y_0) / (- img_pix_size)))
                 z_idx = int(ti.floor((z_rot - z_0) / img_voxel_height))
                 if ((x_idx - img_dim/2.0)**2 + (y_idx - img_dim/2.0)**2) < (img_dim/2.0)**2:
+                    #ensure x_idx and y_idx is in the field of view
                     img_sgm_large_taichi[v_idx + dect_elem_vertical_recon_range_begin,u_idx] = 1.0
-                    if z_idx < 0 or z_idx + 1 >= img_dim_z: 
+                    if z_idx < 0 or z_idx + 1 >= img_dim_z:
+                        #if the corresponding z_idx is out of the field of view along z direction
                         img_sgm_large_taichi[v_idx + dect_elem_vertical_recon_range_begin, u_idx] = 0.0
                         break
     

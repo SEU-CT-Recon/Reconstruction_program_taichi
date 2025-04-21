@@ -24,13 +24,15 @@ def run_mgfbp_ir(file_path):
         print(f"ERROR: Config File {file_path} does not exist!")
         #Judge whether the config jsonc file exist
         sys.exit()
-    config_dict = ReadConfigFile(file_path)#读入jsonc文件并以字典的形式存储在config_dict中
     
+    config_dict = ReadConfigFile(file_path)#读入jsonc文件并以字典的形式存储在config_dict中
+    fbp =  Mgfbp(config_dict) #将config_dict数据以字典的形式送入对象中
+    img_recon_seed = fbp.MainFunction() #generate a seed from fbp reconstruction
     print("Generating seed image from FBP ...")
     start_time = time.time()
     print("\nPerform Iterative Recon ...")
     fbp = Mgfbp_ir_piccs(config_dict) #将config_dict数据以字典的形式送入对象中
-    img_recon = fbp.MainFunction()#use the seed to initialize the iterative process
+    img_recon = fbp.MainFunction(img_recon_seed)#use the seed to initialize the iterative process
     gc.collect()# 手动触发垃圾回收
     ti.reset()# free gpu ram
     end_time = time.time()# record end time point
@@ -66,8 +68,14 @@ class Mgfbp_ir_piccs(Mgfbp_ir):
         if self.convert_to_HU:
               self.img_prior = (self.img_prior/1000 + 1 ) * self.water_mu
         
+        self.v_x = np.zeros_like(self.img_prior)
+        self.v_y = np.zeros_like(self.img_prior)
+        self.coef_rho = 0.1
+        self.p_x = self.v_x
+        self.p_y = self.v_y
+        
    
-    def MainFunction(self):
+    def MainFunction(self,img_recon_seed):
         #Main function for reconstruction
         if not self.bool_uneven_scan_angle:
             self.GenerateAngleArray(
@@ -83,19 +91,44 @@ class Mgfbp_ir_piccs(Mgfbp_ir):
                     self.file_processed_count += 1 
                     print('Reconstructing %s ...' % self.input_path)
 
-                    #if self.convert_to_HU:
-                          #self.img_prior = (self.img_prior/1000.0 + 1 ) * self.water_mu
+                    
                           
                     self.img_fp_effective_map = self.GenEffectiveMapForwardProjection(self.img_x)
-                    self.img_x = self.img_prior
-
+                    if self.convert_to_HU:
+                          img_recon_seed = (img_recon_seed/1000.0 + 1 ) * self.water_mu
+                    self.img_x = img_recon_seed
+                    self.v_x = self.Diff(self.img_x,1)
+                    self.v_y = self.Diff(self.img_x,2)
                     #P^T b
                     self.img_bp_b = self.BackProjection(self.img_sgm)
 
                     WR = np.ones_like(self.img_x)
                     WR_prior = np.ones_like(self.img_x)
-                    self.img_x = self.TikhonovSol(self.img_x,WR,WR_prior,-1)
-                    self.SaveLossValAndPlot()
+                    
+                    for irn_iter_idx in range(self.num_irn_iter):  
+                        
+                        
+                        self.img_x = self.TikhonovSol(self.img_x,WR,WR_prior,irn_iter_idx)
+                        
+                        w_x = self.Diff(self.img_x,1) + self.p_x/self.coef_rho
+                        w_y = self.Diff(self.img_x,2) + self.p_y/self.coef_rho
+                        
+                        temp_vec = np.sqrt( np.multiply(w_x,w_x) + np.multiply(w_y,w_y))
+                        temp_vec_2 = np.multiply((temp_vec- self.coef_lambda * self.pixel_count_ratio / self.coef_rho)>0, temp_vec)
+                        temp_vec_3 = np.zeros_like(temp_vec_2)
+                        temp_vec_3 = np.divide(temp_vec_2,temp_vec,where =(temp_vec!=0))
+                        
+                        self.v_x = temp_vec_3 * w_x
+                        self.v_y = temp_vec_3 * w_y
+                        
+                        
+                        
+                        self.p_x = self.p_x + self.coef_rho * (self.Diff(self.img_x,1) - self.v_x)
+                        self.p_y = self.p_y + self.coef_rho * (self.Diff(self.img_x,2) - self.v_y)
+                        #if self.num_iter_runned%5==0:
+                        self.SaveLossValAndPlot()
+                        self.SaveReconImg()
+                    '''
                     for irn_iter_idx in range(self.num_irn_iter):  
                         WR = self.GenerateWR(self.img_x,self.beta_tv)
                         WR_prior = self.GenerateWR(self.img_x - self.img_prior, self.beta_tv)
@@ -103,6 +136,7 @@ class Mgfbp_ir_piccs(Mgfbp_ir):
                         if self.num_iter_runned%5==0:
                             self.SaveLossValAndPlot()
                         self.SaveReconImg()
+                        '''
                         
 
                     print('\nSaving to %s !' % self.output_path)
@@ -111,8 +145,7 @@ class Mgfbp_ir_piccs(Mgfbp_ir):
     
     def TikhonovSol(self,img_seed,WR,WR_prior, irn_idx):
         img_output = img_seed
-        self.img_d = self.img_bp_b + self.coef_lambda * self.coef_alpha*self.pixel_count_ratio * self.Dt_W_D(self.img_prior, WR_prior)\
-            - self.FunctionFx(img_seed,WR, WR_prior)
+        self.img_d = self.FunctionY()- self.FunctionFx(img_seed, WR, WR_prior)
         self.img_r = self.img_d
 
         for iter_idx in range(self.num_iter):
@@ -145,8 +178,11 @@ class Mgfbp_ir_piccs(Mgfbp_ir):
         return img_output
     
     def FunctionFx(self,img_x, WR, WR_prior):
-        img_output = self.ForwardProjectionAndBackProjection(img_x) + self.coef_lambda* (1-self.coef_alpha) * self.Dt_W_D(img_x, WR) *self.pixel_count_ratio\
-            + self.coef_lambda* self.coef_alpha * self.Dt_W_D(img_x, WR_prior) *self.pixel_count_ratio
+        img_output = self.ForwardProjectionAndBackProjection(img_x) + self.coef_rho * self.Dt_W_D(img_x, WR)
+        return img_output
+    
+    def FunctionY(self):
+        img_output = self.img_bp_b + self.coef_rho * (self.DiffT(self.v_x, 1) + self.DiffT(self.v_y, 2)) - (self.DiffT(self.p_x, 1) + self.DiffT(self.p_y, 2))
         return img_output
     
     def SaveLossValAndPlot(self):
@@ -154,6 +190,26 @@ class Mgfbp_ir_piccs(Mgfbp_ir):
         self.loss = np.append(self.loss,loss_val)
         plt.semilogy(range(len(self.loss)),(self.loss))
         plt.show()
+        
+    def Diff(self,img_x,dim):
+        img_output = np.zeros_like(img_x)
+        if dim == 0:
+            img_output[:-1, :, :]= img_x[1:, :, :] - img_x[:-1, :, :]
+        elif dim == 1:
+            img_output[: ,:-1, :]= img_x[:, 1:, :] - img_x[:, :-1, :]
+        elif dim == 2:
+            img_output[:, :, :-1]= img_x[:, :, 1:] - img_x[:, :,  :-1]
+        return img_output
+    
+    def DiffT(self,img_x,dim):
+        img_output = np.zeros_like(img_x)
+        if dim == 0:
+            img_output[1:-1, :, :]= img_x[0:-2, :, :] - img_x[1:-1, :, :]
+        elif dim == 1:
+            img_output[: ,1:-1, :]= img_x[:, 0:-2, :] - img_x[:,1:-1, :]
+        elif dim == 2:
+            img_output[:, :, 1:-1]= img_x[:, :, 0:-2] - img_x[:, :, 1:-1]
+        return img_output
     
     def LossValCalc(self):
         return 0.5 * np.sum((self.ForwardProjection(self.img_x) - self.img_sgm * self.img_fp_effective_map)**2)/self.sgm_total_pixel_count\
