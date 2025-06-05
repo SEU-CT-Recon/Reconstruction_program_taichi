@@ -40,7 +40,7 @@ import time
 from run_mgfbp import *
 from run_mgfpj_v2 import *
 PI = 3.1415926536
-
+ti.init(default_fp=ti.f32)
 
 def run_mgfpj_v3(file_path):
     ti.reset()
@@ -48,7 +48,7 @@ def run_mgfpj_v3(file_path):
     print('Performing FPJ from MandoCT-Taichi (ver 3.0) ...')
     print('This new version of run_mgfpj inherits from run_mgfpj_v2.' )
     print('Add PMatrix forward projection option.' )
-    print('View by view forward projection with arbitrary view angle and z posotion. ')
+    print('View by view forward projection with arbitrary view angle and z position. ')
     print('Is not fully compatible with mgfpj.exe. ')
     # record start time point
     start_time = time.time()
@@ -222,21 +222,22 @@ class Mgfpj_v3(Mgfpj):
         y_0 = - (img_dim - 1.0) / 2.0 * (- img_pix_size) + img_center_y
         # by default, the first slice corresponds to the bottom of the image object
         z_0 = -(img_dim_z - 1.0) / 2.0 * img_voxel_height + array_img_center_z_taichi[0, angle_idx]
-
+        
         # initialize coordinate for the detector element
         dect_elem_pos_x = dect_elem_pos_y = dect_elem_pos_z = 0.0
         source_dect_elem_dis = 0.0  # initialize detector element to source distance
         # initialize detector element to source unit vector
         unit_vec_lambda_x = unit_vec_lambda_y = unit_vec_lambda_z = 0.0
         # lower range for the line integral
-        l_min = sid - (2 * img_dimension ** 2 +
+        l_min = sid - (2 * img_dimension ** 2 +\
                        image_dimension_z ** 2)**0.5 / 2.0
         # upper range for the line integral
-        l_max = sid + (2 * img_dimension ** 2 +
+        l_max = sid + (2 * img_dimension ** 2 +\
                        image_dimension_z ** 2)**0.5 / 2.0
-        voxel_diagonal_size = (2*(img_pix_size ** 2) +
+        voxel_diagonal_size = (2*(img_pix_size ** 2) +\
                                (img_voxel_height ** 2))**0.5
         sgm_val_lowerslice = sgm_val_upperslice = 0.0
+
 
         #calculate the distance that the gantry moves between adjacent views
         z_dis_per_view = 0.0
@@ -248,8 +249,8 @@ class Mgfpj_v3(Mgfpj):
             #here pitch is calculated from dect_elem_count_vertical, rather than dect_elem_count_vertical_actual
 
         # number of steps
-        count_steps = int(
-            ti.floor((l_max - l_min)/(fpj_step_size * voxel_diagonal_size)))
+        count_steps = int(ti.floor(((2 * img_dimension ** 2 +image_dimension_z ** 2)**0.5)/(fpj_step_size * voxel_diagonal_size)))
+        
 
         for u_idx, v_idx in ti.ndrange(dect_elem_count_horizontal_oversamplesize, dect_elem_count_vertical_actual):
             #v range from 0 to dect_elem_count_vertical_actual - 1
@@ -324,6 +325,7 @@ class Mgfpj_v3(Mgfpj):
                 
                 x_idx = int(ti.floor((x_rot - x_0) / img_pix_size))
                 y_idx = int(ti.floor((y_rot - y_0) / (- img_pix_size)))
+                
 
                 if x_idx >= 0 and x_idx+1 < img_dim and y_idx >= 0 and y_idx+1 < img_dim:
                     x_weight = (

@@ -199,20 +199,24 @@ class Mgfbp_ir_piccs_nmwj(Mgfbp_ir_piccs):
             print('\r' +str_0 + str_1, end='') 
 
             img_output = img_output + delta_img_x
-
+            self.img_x = img_output ###
             self.img_r = self.img_r - np.multiply(alpha, self.img_bp_fp_d)
             
             beta = np.sum(np.multiply(self.img_r, self.img_r)) / r_l2_norm
             self.img_d = self.img_r + beta * self.img_d
             
 
-            if self.num_iter_runned%1==0:
+            if self.num_iter_runned%3==0:
                 if self.convert_to_HU:
                     plt.figure(dpi=300)
-                    #plt.imshow((self.img_x[:,:,int(round(self.img_dim/2))]/ self.water_mu - 1)*1000,cmap = 'gray',vmin = -50, vmax = 100)
-                    plt.imshow((img_output[int(round(self.img_dim_z/2)),:,:]/ self.water_mu - 1)*1000,cmap = 'gray',vmin = -50, vmax = 100)
+                    plt.imshow((img_output[:,:,int(round(self.img_dim/2))]/ self.water_mu - 1)*1000,cmap = 'gray',vmin = -200, vmax = 100)
+                    plt.show()
+                    plt.figure(dpi=300)
+                    plt.imshow((img_output[int(round(self.img_dim_z/2)),:,:]/ self.water_mu - 1)*1000,cmap = 'gray',vmin = -200, vmax = 100)
                     #plt.imshow((self.img_x[0,:,:]/ self.water_mu - 1)*1000,cmap = 'gray',vmin = -30, vmax = 100)
                     plt.show()
+                    
+                    self.SaveLossValAndPlot()
         return img_output
         
     def BackProjection(self, img_sgm):

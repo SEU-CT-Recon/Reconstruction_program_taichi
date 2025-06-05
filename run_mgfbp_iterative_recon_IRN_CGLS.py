@@ -187,9 +187,11 @@ class Mgfbp_ir(Mgfpj_v3):
     
     def TikhonovSol(self,img_seed,WR,irn_idx):
         self.img_bp_fp_x = self.ForwardProjectionAndBackProjection(img_seed)
+        imwriteTiff(self.img_bp_fp_x.transpose(1,0,2),'img_bp_fp_x.tif')
         #imwriteRaw(self.img_bp_fp_x, "img_bp_fp_x.raw")
         img_output = img_seed
         self.img_d = self.img_bp_b - self.img_bp_fp_x - self.coef_lambda * self.Dt_W_D(self.img_x, WR) *self.pixel_count_ratio
+        imwriteTiff(self.img_d.transpose(1,0,2),'img_d.tif')
         #imwriteRaw(self.img_d, "img_d.raw")
         self.img_r = self.img_d
 
@@ -207,20 +209,26 @@ class Mgfbp_ir(Mgfpj_v3):
             print('\r' +str_0 + str_1, end='') 
 
             img_output = img_output + delta_img_x
-
+            self.img_x = img_output ###
+            self.SaveReconImg() ###
             self.img_r = self.img_r - np.multiply(alpha, self.img_bp_fp_d)
             
             beta = np.sum(np.multiply(self.img_r, self.img_r)) / r_l2_norm
             self.img_d = self.img_r + beta * self.img_d
             
 
-            if self.num_iter_runned%1==0:
+            if self.num_iter_runned%3==0:
                 if self.convert_to_HU:
                     plt.figure(dpi=300)
-                    #plt.imshow((img_output[:,:,int(round(self.img_dim/2))]/ self.water_mu - 1)*1000,cmap = 'gray',vmin = -50, vmax = 100)
-                    plt.imshow((img_output[int(round(self.img_dim_z/2)),:,:]/ self.water_mu - 1)*1000,cmap = 'gray',vmin = -50, vmax = 100)
+                    plt.imshow((img_output[:,:,int(round(self.img_dim/2))]/ self.water_mu - 1)*1000,cmap = 'gray',vmin = -50, vmax = 50)
+                    plt.show()
+                    plt.figure(dpi=300)
+                    plt.imshow((img_output[int(round(self.img_dim_z/2)),:,:]/ self.water_mu - 1)*1000,cmap = 'gray',vmin = -50, vmax = 50)
                     #plt.imshow((self.img_x[0,:,:]/ self.water_mu - 1)*1000,cmap = 'gray',vmin = -30, vmax = 100)
                     plt.show()
+                    
+                    self.SaveLossValAndPlot()
+                    
         return img_output
     
     def GenerateWR(self, img_x, beta_tv):
@@ -451,8 +459,8 @@ class Mgfbp_ir(Mgfpj_v3):
                                 
                         temp_v_idx_floor = int(ti.floor(pix_proj_to_dect_v_idx))   #mark
                         if temp_v_idx_floor < 0 or temp_v_idx_floor + 1 > dect_elem_count_vertical_actual - 1:
-                            img_x_truncation_flag_taichi[i_z, i_y, i_x] = 0.0 #mark the truncated region with -10000
-                            #img_recon_taichi[i_z, i_y, i_x] +=0.0
+                            #img_x_truncation_flag_taichi[i_z, i_y, i_x] = 0.0 #mark the truncated region with -10000
+                            img_recon_taichi[i_z, i_y, i_x] +=0.0
                         else:
                             ratio_v = pix_proj_to_dect_v_idx - temp_v_idx_floor
                             part_0 = img_sgm_filtered_taichi[temp_v_idx_floor,temp_u_idx_floor] * (1 - ratio_u) + \
