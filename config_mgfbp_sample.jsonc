@@ -112,5 +112,6 @@
   "PMatrixDetectorElementWidth" : 0.2,
   "SaveModifiedConfigName": "config_1.jsonc",
   "ModifyPMatrixToStandardForm": true, 
-  "DetectorElementVerticalGaussFilterSize": 2
+  "DetectorElementVerticalGaussFilterSize": 2,
+  "DBTMode": true
 }
