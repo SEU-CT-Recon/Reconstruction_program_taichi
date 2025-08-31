@@ -456,11 +456,21 @@ class Mgfbp:
             self.array_kernel_ramp_taichi = ti.field(dtype=ti.f32, shape=2*self.dect_elem_count_horizontal-1)
             self.array_kernel_gauss_taichi = ti.field(dtype=ti.f32, shape=2*self.dect_elem_count_horizontal-1)
             #当进行高斯核运算的时候需要两个额外的数组存储相关数据
+        elif 'None' in config_dict:
+            self.kernel_name = 'None'
+            self.kernel_param = 0.0
         else:
             self.kernel_param = 0.0 #kernel is not defined
         if not isinstance(self.kernel_param,float) and not isinstance(self.kernel_param,int):
             print("ERROR: Kernel parameter must be a number!")
             sys.exit()
+            
+        if 'DBTMode' in config_dict:#judge whether this recon is a dbt recon
+            self.dbt_or_not = config_dict['DBTMode']
+            if self.dbt_or_not:
+                print("--DBT kernel applied")
+        else:
+            self.dbt_or_not = 0
         
         ######## whether images are converted to HU ########
         if 'WaterMu' in config_dict: 
@@ -869,7 +879,7 @@ class Mgfbp:
         
     @ti.kernel
     def GenerateHammingKernel(self,dect_elem_count_horizontal:ti.i32,dect_elem_width:ti.f32,kernel_param:ti.f32,\
-                              source_dect_dis:ti.f32,array_recon_kernel_taichi:ti.template(),curved_dect:ti.i32):
+                              source_dect_dis:ti.f32,array_recon_kernel_taichi:ti.template(),curved_dect:ti.i32 ,dbt_or_not:ti.i32):
         #计算hamming核分两步处理
         n = 0
         bias = dect_elem_count_horizontal - 1
@@ -886,12 +896,24 @@ class Mgfbp:
                     temp_val = float(n) * dect_elem_width / source_dect_dis
                     array_recon_kernel_taichi[i] = -t / (PI * PI * (source_dect_dis **2) * (temp_val - temp_val**3/3/2/1 + temp_val**5/5/4/3/2/1)**2)
                     #use taylor expansion to replace the built-in taichi.sin function
-                    #this function leads to 1% bias in calculation
+                    #the built-in taichi.sin function leads to 1% bias in calculation
                 else:
                     array_recon_kernel_taichi[i] = -t / (PI * PI * (float(n) **2) * (dect_elem_width **2))
             #part 2 cosine
             sgn = 1 if n % 2 == 0 else -1
             array_recon_kernel_taichi[i] += (1-t)*(sgn/(2 * PI * dect_elem_width * dect_elem_width)*(1/(1 + 2 * n)+ 1 / (1 - 2 * n))- 1 / (PI * PI * dect_elem_width * dect_elem_width) * (1 / (1 + 2 * n) / (1 + 2 * n) + 1 / (1 - 2 * n) / (1 - 2 * n)))
+            
+            # #modified ramp for DBT
+            if dbt_or_not == 1:
+                k_t = 0.01 / (2 * dect_elem_width)
+                if n == 0:
+                    array_recon_kernel_taichi[i] += k_t ** 2
+                else:
+                    temp_val = n * dect_elem_width * k_t * PI
+                    array_recon_kernel_taichi[i] += (ti.sin(temp_val) **2) / ((temp_val) **2) * (k_t **2)
+            else:
+                pass
+            
 
     @ti.kernel
     def GenerateGassianKernel(self,dect_elem_count_horizontal:ti.i32,dect_elem_width:ti.f32,kernel_param:ti.f32,array_kernel_gauss_taichi:ti.template()):
@@ -1002,8 +1024,9 @@ class Mgfbp:
                 # if vertical filter is applied, apply vertical filtering and 
                 # save the intermediate result to img_sgm_filtered_intermediate_taichi
                 for n in ti.ndrange(dect_elem_count_vertical_actual):
-                    temp_val += img_sgm_taichi[n, j, k] \
-                        * array_kernel_gauss_vertical_taichi[i + (dect_elem_count_vertical_actual - 1) - n]
+                    if i - n <= 10 and  i - n >=-10: #set a 10 pixel threshold to accelerate the program  
+                        temp_val += img_sgm_taichi[n, j, k] \
+                            * array_kernel_gauss_vertical_taichi[i + (dect_elem_count_vertical_actual - 1) - n]
                 img_sgm_filtered_intermediate_taichi[i, j, k] = temp_val * dect_elem_height
             else:
                 pass
@@ -1069,7 +1092,7 @@ class Mgfbp:
                     x_after_rot = img_pix_size * (i_x - (img_dim - 1) / 2.0) + img_center_x
                     y_after_rot = - img_pix_size * (i_y - (img_dim - 1) / 2.0) + img_center_y
                     z = (i_z - (img_dim_z - 1) / 2.0) * img_voxel_height + img_center_z
-                elif recon_view_mode == 2: #coronal view (from fron to back)
+                elif recon_view_mode == 2: #coronal view (from front to back)
                     x_after_rot = img_pix_size * (i_x - (img_dim - 1) / 2.0) + img_center_x
                     z = - img_pix_size * (i_y - (img_dim - 1) / 2.0) + img_center_z
                     y_after_rot = - (i_z - (img_dim_z - 1) / 2.0) * img_voxel_height + img_center_y
@@ -1220,7 +1243,7 @@ class Mgfbp:
     def InitializeReconKernel(self):
         if 'HammingFilter' in self.config_dict:
             self.GenerateHammingKernel(self.dect_elem_count_horizontal,self.dect_elem_width,\
-                                       self.kernel_param,self.source_dect_dis,self.array_recon_kernel_taichi,self.curved_dect)
+                                       self.kernel_param,self.source_dect_dis,self.array_recon_kernel_taichi,self.curved_dect, self.dbt_or_not)
             #计算hamming核存储在array_recon_kernel_taichi
             
         elif 'GaussianApodizedRamp' in self.config_dict:
@@ -1228,7 +1251,7 @@ class Mgfbp:
                                        self.kernel_param,self.array_kernel_gauss_taichi)
             #计算高斯核存储在array_kernel_gauss_taichi
             self.GenerateHammingKernel(self.dect_elem_count_horizontal,self.dect_elem_width,1,\
-                                       self.source_dect_dis,self.array_kernel_ramp_taichi,self.curved_dect)
+                                       self.source_dect_dis,self.array_kernel_ramp_taichi,self.curved_dect, self.dbt_or_not)
             #1.以hamming参数1调用一次hamming核处理运算结果存储在array_kernel_ramp_taichi
             self.ConvolveKernelAndKernel(self.dect_elem_count_horizontal,self.dect_elem_width,\
                                          self.array_kernel_ramp_taichi,self.array_kernel_gauss_taichi,self.array_recon_kernel_taichi)
@@ -1239,18 +1262,22 @@ class Mgfbp:
 
             
     def FilterSinogram(self):
-        self.ConvolveSgmAndKernel(self.dect_elem_count_vertical_actual,self.view_num,self.dect_elem_count_horizontal,\
-                                  self.dect_elem_width,self.img_sgm,self.array_recon_kernel_taichi,\
-                                      self.array_kernel_gauss_vertical_taichi,self.dect_elem_height, self.apply_gauss_vertical,
-                                      self.img_sgm_filtered_intermediate_taichi, self.img_sgm_filtered_taichi)
-        #pass img_sgm directly into this function using unified memory
-        #用hamming核计算出的array_recon_kernel_taichi计算卷积后的正弦图img_sgm_filtered_taichi
+        if self.kernel_name == 'None':
+            self.img_sgm_filtered_taichi.from_numpy(self.img_sgm)
+            #non filtration is performed
+        else:
+            self.ConvolveSgmAndKernel(self.dect_elem_count_vertical_actual,self.view_num,self.dect_elem_count_horizontal,\
+                                      self.dect_elem_width,self.img_sgm,self.array_recon_kernel_taichi,\
+                                          self.array_kernel_gauss_vertical_taichi,self.dect_elem_height, self.apply_gauss_vertical,
+                                          self.img_sgm_filtered_intermediate_taichi, self.img_sgm_filtered_taichi)
+            #pass img_sgm directly into this function using unified memory
+            #用hamming核计算出的array_recon_kernel_taichi计算卷积后的正弦图img_sgm_filtered_taichi
         
     def SaveFilteredSinogram(self):
         if self.save_filtered_sinogram:
             sgm_filtered = self.img_sgm_filtered_taichi.to_numpy()
             sgm_filtered = sgm_filtered.astype(np.float32)
-            imwriteRaw(sgm_filtered,self.output_dir+'/'+ self.output_file +'sgm_filtered.raw',dtype=np.float32)
+            imwriteRaw(sgm_filtered,self.output_dir+'/'+ self.output_file +'_sgm_filtered.raw',dtype=np.float32)
             del sgm_filtered
 
             

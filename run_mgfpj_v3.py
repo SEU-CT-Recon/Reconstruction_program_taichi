@@ -67,7 +67,7 @@ def run_mgfpj_v3(file_path):
     if fpj.file_processed_count > 0:
         print(
             f"\nA total of {fpj.file_processed_count:d} files are forward projected!")
-        print(f"Time cost if {execution_time:.3} sec\n")
+        print(f"Time cost is {execution_time:.3} sec\n")
     else:
         print(
             f"\nWarning: Did not find files like {fpj.input_files_pattern:s} in {fpj.input_dir:s}.")

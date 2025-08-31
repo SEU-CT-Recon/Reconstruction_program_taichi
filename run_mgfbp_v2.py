@@ -100,7 +100,7 @@ class Mgfbp_v2(Mgfbp):
         
         del self.img_sgm_filtered_taichi
         
-        #sgm in taichi contains info in only one_view to save gpu memory
+        #sgm in taichi contains info in only one_view to save gpu memory !!!
         self.img_sgm_taichi = ti.field(dtype=ti.f32, shape=(self.dect_elem_count_vertical_actual,1, self.dect_elem_count_horizontal)) 
         self.img_sgm_filtered_taichi = ti.field(dtype=ti.f32, shape=(self.dect_elem_count_vertical_actual,1,self.dect_elem_count_horizontal))
         
@@ -127,7 +127,7 @@ class Mgfbp_v2(Mgfbp):
     def WeightSgm(self, dect_elem_count_vertical_actual:ti.i32, short_scan:ti.i32, curved_dect:ti.i32, scan_angle:ti.f32,\
                   view_num:ti.i32, dect_elem_count_horizontal:ti.i32, source_dect_dis:ti.f32,img_sgm_taichi:ti.template(),\
                       array_u_taichi:ti.template(),array_v_taichi:ti.template(),array_angle_taichi:ti.template(), view_idx:ti.i32):
-        #对正弦图做加权，包括fan beam的cos加权和短扫面加权
+        #对正弦图做加权，包括fan beam的cos加权和短扫描加权
         for   j in ti.ndrange(dect_elem_count_horizontal):
             u_actual = array_u_taichi[j]
             for s in ti.ndrange(dect_elem_count_vertical_actual):
@@ -180,10 +180,14 @@ class Mgfbp_v2(Mgfbp):
                     img_sgm_taichi[s,0,j] *= weighting
     
     def FilterSinogram(self):
-        self.ConvolveSgmAndKernel(self.dect_elem_count_vertical_actual,self.view_num,self.dect_elem_count_horizontal,\
-                                  self.dect_elem_width,self.img_sgm_taichi,self.array_recon_kernel_taichi,\
-                                      self.array_kernel_gauss_vertical_taichi,self.dect_elem_height, self.apply_gauss_vertical,
-                                      self.img_sgm_filtered_intermediate_taichi, self.img_sgm_filtered_taichi)
+        if self.kernel_name == 'None':
+            self.img_sgm_filtered_taichi.from_numpy(self.img_sgm)
+            #non filtration is performed
+        else:
+            self.ConvolveSgmAndKernel(self.dect_elem_count_vertical_actual,self.view_num,self.dect_elem_count_horizontal,\
+                                      self.dect_elem_width,self.img_sgm_taichi,self.array_recon_kernel_taichi,\
+                                          self.array_kernel_gauss_vertical_taichi,self.dect_elem_height, self.apply_gauss_vertical,
+                                          self.img_sgm_filtered_intermediate_taichi, self.img_sgm_filtered_taichi)
     @ti.kernel
     def ConvolveSgmAndKernel(self, dect_elem_count_vertical_actual:ti.i32, view_num:ti.i32, \
                              dect_elem_count_horizontal:ti.i32, dect_elem_width:ti.f32, img_sgm_taichi:ti.template(), \
@@ -197,8 +201,9 @@ class Mgfbp_v2(Mgfbp):
                 # if vertical filter is applied, apply vertical filtering and 
                 # save the intermediate result to img_sgm_filtered_intermediate_taichi
                 for n in ti.ndrange(dect_elem_count_vertical_actual):
-                    temp_val += img_sgm_taichi[n, 0, k] \
-                        * array_kernel_gauss_vertical_taichi[i + (dect_elem_count_vertical_actual - 1) - n]
+                    if i - n <= 10 and  i - n >=-10: #set a 10 pixel threshold to accelerate the program  
+                        temp_val += img_sgm_taichi[n, 0, k] \
+                            * array_kernel_gauss_vertical_taichi[i + (dect_elem_count_vertical_actual - 1) - n]
                 img_sgm_filtered_intermediate_taichi[i, 0, k] = temp_val * dect_elem_height
             else:
                 pass
@@ -249,12 +254,13 @@ class Mgfbp_v2(Mgfbp):
             div_factor = 1.0 / (num_rounds*2.0)
         
         for i_x, i_y, i_z in ti.ndrange(img_dim, img_dim, img_dim_z):
+            img_recon_taichi[i_z, i_y, i_x] = 0.0
             x_after_rot = 0.0; y_after_rot = 0.0; x=0.0; y=0.0;z=0.0;
             if recon_view_mode == 1: #axial view (from bottom to top)
                 x_after_rot = img_pix_size * (i_x - (img_dim - 1) / 2.0) + img_center_x
                 y_after_rot = - img_pix_size * (i_y - (img_dim - 1) / 2.0) + img_center_y
                 z = (i_z - (img_dim_z - 1) / 2.0) * img_voxel_height + img_center_z
-            elif recon_view_mode == 2: #coronal view (from fron to back)
+            elif recon_view_mode == 2: #coronal view (from front to back)
                 x_after_rot = img_pix_size * (i_x - (img_dim - 1) / 2.0) + img_center_x
                 z = - img_pix_size * (i_y - (img_dim - 1) / 2.0) + img_center_z
                 y_after_rot = - (i_z - (img_dim_z - 1) / 2.0) * img_voxel_height + img_center_y
