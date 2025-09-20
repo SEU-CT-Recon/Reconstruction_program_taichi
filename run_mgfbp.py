@@ -250,7 +250,7 @@ class Mgfbp:
             self.dect_offset_horizontal = config_dict['DetectorOffsetHorizontal']
         else:
             print("Warning: Can not find horizontal detector offset; Using default value 0")
-        if not isinstance(self.dect_offset_horizontal, float) and not isinstance(self.dect_offset_horizontal, int):
+        if not isinstance(self.dect_offset_horizontal, float) and not isinstance(self.dect_offset_horizontal, int) and not isinstance(self.dect_offset_horizontal, list):
             print("ERROR: DetectorOffsetHorizontal (DetectorOffcenter) should be a number!")
             sys.exit()
             
@@ -879,7 +879,7 @@ class Mgfbp:
         
     @ti.kernel
     def GenerateHammingKernel(self,dect_elem_count_horizontal:ti.i32,dect_elem_width:ti.f32,kernel_param:ti.f32,\
-                              source_dect_dis:ti.f32,array_recon_kernel_taichi:ti.template(),curved_dect:ti.i32 ,dbt_or_not:ti.i32):
+                              source_dect_dis:ti.f32, source_isocenter_dis:ti.f32, array_recon_kernel_taichi:ti.template(),curved_dect:ti.i32 ,dbt_or_not:ti.i32):
         #计算hamming核分两步处理
         n = 0
         bias = dect_elem_count_horizontal - 1
@@ -905,12 +905,14 @@ class Mgfbp:
             
             # #modified ramp for DBT
             if dbt_or_not == 1:
-                k_t = 0.01 / (2 * dect_elem_width)
+                k_t = 0.01 / (2 * (dect_elem_width ))
                 if n == 0:
-                    array_recon_kernel_taichi[i] += k_t ** 2
+                    array_recon_kernel_taichi[i] += k_t ** 2 * source_isocenter_dis / source_dect_dis 
+                    # add this * source_isocenter_dis / source_dect_dis factor so that images with different magnification look the same
+                    # there is an 1/source_dect_dis factor factor in the weightsgm function
                 else:
                     temp_val = n * dect_elem_width * k_t * PI
-                    array_recon_kernel_taichi[i] += (ti.sin(temp_val) **2) / ((temp_val) **2) * (k_t **2)
+                    array_recon_kernel_taichi[i] += (ti.sin(temp_val) **2) / ((temp_val) **2) * (k_t **2) * source_isocenter_dis / source_dect_dis
             else:
                 pass
             
@@ -1096,7 +1098,7 @@ class Mgfbp:
                     x_after_rot = img_pix_size * (i_x - (img_dim - 1) / 2.0) + img_center_x
                     z = - img_pix_size * (i_y - (img_dim - 1) / 2.0) + img_center_z
                     y_after_rot = - (i_z - (img_dim_z - 1) / 2.0) * img_voxel_height + img_center_y
-                elif recon_view_mode == 3: #sagittal view (from left to right)
+                elif recon_view_mode == 3: #sagittal view (from right to left)
                     z = - img_pix_size * (i_y - (img_dim - 1) / 2.0) + img_center_z
                     y_after_rot = - img_pix_size * (i_x - (img_dim - 1) / 2.0) + img_center_y
                     x_after_rot = (i_z - (img_dim_z - 1) / 2.0) * img_voxel_height + img_center_x
@@ -1243,7 +1245,7 @@ class Mgfbp:
     def InitializeReconKernel(self):
         if 'HammingFilter' in self.config_dict:
             self.GenerateHammingKernel(self.dect_elem_count_horizontal,self.dect_elem_width,\
-                                       self.kernel_param,self.source_dect_dis,self.array_recon_kernel_taichi,self.curved_dect, self.dbt_or_not)
+                                       self.kernel_param,self.source_dect_dis,self.source_isocenter_dis,self.array_recon_kernel_taichi,self.curved_dect, self.dbt_or_not)
             #计算hamming核存储在array_recon_kernel_taichi
             
         elif 'GaussianApodizedRamp' in self.config_dict:
@@ -1251,7 +1253,7 @@ class Mgfbp:
                                        self.kernel_param,self.array_kernel_gauss_taichi)
             #计算高斯核存储在array_kernel_gauss_taichi
             self.GenerateHammingKernel(self.dect_elem_count_horizontal,self.dect_elem_width,1,\
-                                       self.source_dect_dis,self.array_kernel_ramp_taichi,self.curved_dect, self.dbt_or_not)
+                                       self.source_dect_dis,self.source_isocenter_dis,self.array_kernel_ramp_taichi,self.curved_dect, self.dbt_or_not)
             #1.以hamming参数1调用一次hamming核处理运算结果存储在array_kernel_ramp_taichi
             self.ConvolveKernelAndKernel(self.dect_elem_count_horizontal,self.dect_elem_width,\
                                          self.array_kernel_ramp_taichi,self.array_kernel_gauss_taichi,self.array_recon_kernel_taichi)

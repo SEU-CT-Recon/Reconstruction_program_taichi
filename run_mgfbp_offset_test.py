@@ -73,8 +73,8 @@ class Mgfbp_offset_test(Mgfbp):
                             self.InitializeArrays()  
                             self.WeightSgm(self.dect_elem_count_vertical_actual,self.short_scan,self.curved_dect,\
                                            self.total_scan_angle,self.view_num,self.dect_elem_count_horizontal,\
-                                               self.source_dect_dis,self.img_sgm_taichi,\
-                                                   self.array_u_taichi,self.array_v_taichi,self.array_angel_taichi)
+                                               self.source_dect_dis,self.img_sgm,\
+                                                   self.array_u_taichi,self.array_v_taichi,self.array_angle_taichi)
                             print('Filtering sinogram ...')
                             self.FilterSinogram()
                             self.SaveFilteredSinogram()
@@ -83,21 +83,21 @@ class Mgfbp_offset_test(Mgfbp):
                             print('Back Projection ...')
                             self.BackProjectionPixelDriven(self.dect_elem_count_vertical_actual, self.img_dim, self.dect_elem_count_horizontal, \
                                             self.view_num, self.dect_elem_width,self.img_pix_size, self.source_isocenter_dis, self.source_dect_dis,self.total_scan_angle,\
-                                            self.array_angel_taichi, self.img_rot,self.img_sgm_filtered_taichi,self.img_recon_taichi,\
+                                            self.array_angle_taichi, self.img_rot,self.img_sgm_filtered_taichi,self.img_recon_taichi,\
                                             self.array_u_taichi,self.short_scan,self.cone_beam,self.dect_elem_height,\
                                                 self.array_v_taichi,self.img_dim_z,self.img_voxel_height,\
                                                     self.img_center_x,self.img_center_y,self.img_center_z,self.curved_dect,\
-                                                        self.bool_apply_pmatrix,self.array_pmatrix_taichi)
+                                                        self.bool_apply_pmatrix,self.array_pmatrix_taichi, self.recon_view_mode)
                         else:
                             self.dect_offset_horizontal = self.array_dect_offset_horizontal[offset_idx]
                             self.InitializeArrays()  
                             self.BackProjectionPixelDriven(self.dect_elem_count_vertical_actual, self.img_dim, self.dect_elem_count_horizontal, \
                                             self.view_num, self.dect_elem_width,self.img_pix_size, self.source_isocenter_dis, self.source_dect_dis,self.total_scan_angle,\
-                                            self.array_angel_taichi, self.img_rot,self.img_sgm_filtered_taichi,self.img_recon_taichi,\
+                                            self.array_angle_taichi, self.img_rot,self.img_sgm_filtered_taichi,self.img_recon_taichi,\
                                             self.array_u_taichi,self.short_scan,self.cone_beam,self.dect_elem_height,\
                                                 self.array_v_taichi,self.img_dim_z,self.img_voxel_height,\
                                                     self.img_center_x,self.img_center_y,self.img_center_z,self.curved_dect,\
-                                                        self.bool_apply_pmatrix,self.array_pmatrix_taichi)
+                                                        self.bool_apply_pmatrix,self.array_pmatrix_taichi, self.recon_view_mode)
                             
                         self.img_recon_combine[offset_idx*self.img_dim_z: (offset_idx+1)*self.img_dim_z ,:,:] = self.img_recon_taichi.to_numpy()
     

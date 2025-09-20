@@ -68,6 +68,7 @@ class Mgfbp_v2(Mgfbp):
                 if self.ReadSinogram(file):
                     self.file_processed_count += 1 
                     print('\nReconstructing %s ...' % self.input_path)
+                    
                     for view_idx in range(self.view_num):
                         str = 'Processing view #%4d/%4d' % (view_idx+1, self.view_num)
                         print('\r' + str, end='')
@@ -181,7 +182,7 @@ class Mgfbp_v2(Mgfbp):
     
     def FilterSinogram(self):
         if self.kernel_name == 'None':
-            self.img_sgm_filtered_taichi.from_numpy(self.img_sgm)
+            self.img_sgm_filtered_taichi = self.img_sgm_taichi
             #non filtration is performed
         else:
             self.ConvolveSgmAndKernel(self.dect_elem_count_vertical_actual,self.view_num,self.dect_elem_count_horizontal,\
@@ -254,7 +255,7 @@ class Mgfbp_v2(Mgfbp):
             div_factor = 1.0 / (num_rounds*2.0)
         
         for i_x, i_y, i_z in ti.ndrange(img_dim, img_dim, img_dim_z):
-            img_recon_taichi[i_z, i_y, i_x] = 0.0
+            #img_recon_taichi[i_z, i_y, i_x] = 0.0 this must be comment since we do not set image recon to zero for each view
             x_after_rot = 0.0; y_after_rot = 0.0; x=0.0; y=0.0;z=0.0;
             if recon_view_mode == 1: #axial view (from bottom to top)
                 x_after_rot = img_pix_size * (i_x - (img_dim - 1) / 2.0) + img_center_x
@@ -264,7 +265,7 @@ class Mgfbp_v2(Mgfbp):
                 x_after_rot = img_pix_size * (i_x - (img_dim - 1) / 2.0) + img_center_x
                 z = - img_pix_size * (i_y - (img_dim - 1) / 2.0) + img_center_z
                 y_after_rot = - (i_z - (img_dim_z - 1) / 2.0) * img_voxel_height + img_center_y
-            elif recon_view_mode == 3: #sagittal view (from left to right)
+            elif recon_view_mode == 3: #sagittal view (from right to left)
                 z = - img_pix_size * (i_y - (img_dim - 1) / 2.0) + img_center_z
                 y_after_rot = - img_pix_size * (i_x - (img_dim - 1) / 2.0) + img_center_y
                 x_after_rot = (i_z - (img_dim_z - 1) / 2.0) * img_voxel_height + img_center_x
