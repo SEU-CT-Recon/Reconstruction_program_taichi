@@ -50,6 +50,7 @@ def run_mgfbp(file_path):
 class Mgfbp:
     def MainFunction(self):
         #Main function for reconstruction
+        self.InitializeSinogramBuffer()#initialize sinogram buffer
         self.InitializeArrays()#initialize arrays
         self.InitializeReconKernel()#initialize reconstruction kernel
         self.file_processed_count = 0;#record the number of files processed
@@ -57,7 +58,7 @@ class Mgfbp:
             if re.match(self.input_files_pattern, file):#match the file pattern
                 if self.ReadSinogram(file):
                     self.file_processed_count += 1 
-                    print('\nReconstructing %s ...' % self.input_path)
+                    print('Reconstructing %s ...' % self.input_path)
                     if self.bool_bh_correction:
                         self.BHCorrection(self.dect_elem_count_vertical_actual, self.view_num, self.dect_elem_count_horizontal,self.img_sgm,\
                                           self.array_bh_coefficients_taichi,self.bh_corr_order)#pass img_sgm directly into this function using unified memory
@@ -665,18 +666,7 @@ class Mgfbp:
         
             
         self.img_recon = np.zeros((self.img_dim_z,self.img_dim,self.img_dim),dtype = np.float32)
-        self.img_sgm = np.zeros((self.dect_elem_count_vertical_actual, self.view_num, self.dect_elem_count_horizontal),dtype = np.float32)
-              
-        ######### initialize taichi components ########
-        #img_sgm_filtered_taichi存储卷积后的正弦
-        self.img_sgm_filtered_taichi = ti.field(dtype=ti.f32, shape=(self.dect_elem_count_vertical_actual,self.view_num, self.dect_elem_count_horizontal))
-        #img_sgm_filtered_taichi 纵向卷积后正弦图的中间结果，then apply horizontal convolution
         
-        if self.apply_gauss_vertical:
-            self.img_sgm_filtered_intermediate_taichi = ti.field(dtype=ti.f32, shape=(self.dect_elem_count_vertical_actual,self.view_num, self.dect_elem_count_horizontal))
-        else:
-            self.img_sgm_filtered_intermediate_taichi = ti.field(dtype=ti.f32, shape=(1,1,1))
-            #if vertical gauss filter is not applied, initialize this intermediate sgm with a small size to save GPU memory
         
         self.img_recon_taichi = ti.field(dtype=ti.f32, shape=(self.img_dim_z,self.img_dim, self.img_dim),order='ikj')
         #img_recon_taichi is the reconstructed img
@@ -1170,7 +1160,7 @@ class Mgfbp:
                                     array_pmatrix_taichi[12*j + 6] * z +\
                                         array_pmatrix_taichi[12*j + 7] * 1) * mag_factor
                                 
-                        temp_v_idx_floor = int(ti.floor(pix_proj_to_dect_v_idx))   #mark
+                        temp_v_idx_floor = int(ti.floor(pix_proj_to_dect_v_idx)) 
                         if temp_v_idx_floor < 0 or temp_v_idx_floor + 1 > dect_elem_count_vertical_actual - 1:
                             img_recon_taichi[i_z, i_y, i_x] = 0
                             break
@@ -1180,6 +1170,7 @@ class Mgfbp:
                                 img_sgm_filtered_taichi[temp_v_idx_floor,j,temp_u_idx_floor + 1] * ratio_u
                             part_1 = img_sgm_filtered_taichi[temp_v_idx_floor + 1,j,temp_u_idx_floor] * (1 - ratio_u) +\
                                   img_sgm_filtered_taichi[temp_v_idx_floor + 1,j,temp_u_idx_floor + 1] * ratio_u
+                                  
                             img_recon_taichi[i_z, i_y, i_x] += (source_isocenter_dis * distance_weight) * \
                                 ((1 - ratio_v) * part_0 + ratio_v * part_1) * delta_angle * div_factor
                     else: 
@@ -1196,6 +1187,7 @@ class Mgfbp:
             print(f"ERROR: did not file string '{self.output_file_replace[0]}' to replace in '{self.output_file}'")
             sys.exit()
         else:
+            print('\nLoading %s to RAM...' % self.input_path)
             if self.output_file_format == 'tif' or self.output_file_format == 'tiff':
                 #to save to tif, '*.raw' need to be changed to '*.tif'
                 self.output_file = re.sub('.raw', '.tif', self.output_file)
@@ -1224,6 +1216,20 @@ class Mgfbp:
             #no longer need this: self.img_sgm_taichi.from_numpy(self.img_sgm)
             #since img_sgm can be directly passed to ti kernel functions using unified memory
             return True
+    
+    def InitializeSinogramBuffer(self):
+        self.img_sgm = np.zeros((self.dect_elem_count_vertical_actual, self.view_num, self.dect_elem_count_horizontal),dtype = np.float32)
+              
+        ######### initialize taichi components ########
+        #img_sgm_filtered_taichi存储卷积后的正弦
+        self.img_sgm_filtered_taichi = ti.field(dtype=ti.f32, shape=(self.dect_elem_count_vertical_actual,self.view_num, self.dect_elem_count_horizontal))
+        #img_sgm_filtered_taichi 纵向卷积后正弦图的中间结果，then apply horizontal convolution
+        
+        if self.apply_gauss_vertical:
+            self.img_sgm_filtered_intermediate_taichi = ti.field(dtype=ti.f32, shape=(self.dect_elem_count_vertical_actual,self.view_num, self.dect_elem_count_horizontal))
+        else:
+            self.img_sgm_filtered_intermediate_taichi = ti.field(dtype=ti.f32, shape=(1,1,1))
+            #if vertical gauss filter is not applied, initialize this intermediate sgm with a small size to save GPU memory
     
     def InitializeArrays(self):
         #calculate u array; by default, +u is along -y direction

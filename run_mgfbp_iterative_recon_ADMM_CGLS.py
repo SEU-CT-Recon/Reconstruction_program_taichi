@@ -77,6 +77,7 @@ class Mgfbp_ir_piccs(Mgfbp_ir):
    
     def MainFunction(self,img_recon_seed):
         #Main function for reconstruction
+        self.InitializeSinogramBuffer()
         if not self.bool_uneven_scan_angle:
             self.GenerateAngleArray(
                 self.view_num, self.img_rot, self.total_scan_angle, self.array_angle_taichi)

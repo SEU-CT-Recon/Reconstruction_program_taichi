@@ -59,7 +59,7 @@ class Mgfbp_offset_test(Mgfbp):
     
     def MainFunction(self):
         #Main function for reconstruction
-        
+        self.InitializeSinogramBuffer()
         self.InitializeReconKernel()    
         self.file_processed_count = 0;
         for file in os.listdir(self.input_dir):
