@@ -70,7 +70,7 @@ class Mgfbp_nmwj(Mgfbp):
         self.InitializeReconKernel()#initialize reconstruction kernel
         self.file_processed_count = 0;#record the number of files processed
         self.file_processed_count = 1
-        img_sgm_filtered_total = np.zeros(shape = (24,self.dect_elem_count_vertical,self.view_num,self.dect_elem_count_horizontal), dtype = np.float32)
+        img_sgm_filtered_total = np.zeros(shape = (24,self.det_elem_count_vertical,self.view_num,self.det_elem_count_horizontal), dtype = np.float32)
         for source_idx in range(24):
             file = 'sgm_rebin_'+str(source_idx + 1)+'.raw'
             if self.ReadSinogram(file):
@@ -126,12 +126,12 @@ class Mgfbp_nmwj(Mgfbp):
                     if view_idx_floor >= 0 and view_idx <= (self.view_num-2):
                         self.img_sgm_filtered_taichi.from_numpy(img_sgm_filtered_total[source_idx,:,view_idx_floor:view_idx_floor+1,:])
                         z_source = view_idx_floor * (angle_array[1] - angle_array[0]) * dis_per_rad + z_array[0]
-                        self.BackProjectionPixelDriven(self.dect_elem_count_vertical_actual,\
-                                                       self.img_dim, self.dect_elem_count_horizontal, \
-                                        self.view_num, self.dect_elem_width,self.img_pix_size, self.source_isocenter_dis,\
-                                            self.source_dect_dis, self.total_scan_angle,\
+                        self.BackProjectionPixelDriven(self.det_elem_count_vertical_actual,\
+                                                       self.img_dim, self.det_elem_count_horizontal, \
+                                        self.view_num, self.det_elem_width,self.img_pix_size, self.source_isocenter_dis,\
+                                            self.source_det_dis, self.total_scan_angle,\
                                         self.array_angle_taichi, self.img_rot,self.img_sgm_filtered_taichi,self.img_recon_per_view_taichi,\
-                                        self.array_u_taichi,self.short_scan,self.cone_beam,self.dect_elem_height,\
+                                        self.array_u_taichi,self.short_scan,self.cone_beam,self.det_elem_height,\
                                             self.array_v_taichi,self.img_dim_z,self.img_voxel_height,\
                                                 self.img_center_x,self.img_center_y,self.img_center_z,self.curved_dect,\
                                                     self.bool_apply_pmatrix,self.array_pmatrix_taichi, self.recon_view_mode, \
@@ -140,12 +140,12 @@ class Mgfbp_nmwj(Mgfbp):
                         
                         self.img_sgm_filtered_taichi.from_numpy(img_sgm_filtered_total[source_idx,:,view_idx_floor+1:view_idx_floor+2,:])
                         z_source =( view_idx_floor+1) * (angle_array[1] - angle_array[0]) * dis_per_rad + z_array[0]
-                        self.BackProjectionPixelDriven(self.dect_elem_count_vertical_actual,\
-                                                       self.img_dim, self.dect_elem_count_horizontal, \
-                                        self.view_num, self.dect_elem_width,self.img_pix_size, self.source_isocenter_dis,\
-                                            self.source_dect_dis, self.total_scan_angle,\
+                        self.BackProjectionPixelDriven(self.det_elem_count_vertical_actual,\
+                                                       self.img_dim, self.det_elem_count_horizontal, \
+                                        self.view_num, self.det_elem_width,self.img_pix_size, self.source_isocenter_dis,\
+                                            self.source_det_dis, self.total_scan_angle,\
                                         self.array_angle_taichi, self.img_rot,self.img_sgm_filtered_taichi,self.img_recon_per_view_taichi,\
-                                        self.array_u_taichi,self.short_scan,self.cone_beam,self.dect_elem_height,\
+                                        self.array_u_taichi,self.short_scan,self.cone_beam,self.det_elem_height,\
                                             self.array_v_taichi,self.img_dim_z,self.img_voxel_height,\
                                                 self.img_center_x,self.img_center_y,self.img_center_z,self.curved_dect,\
                                                     self.bool_apply_pmatrix,self.array_pmatrix_taichi, self.recon_view_mode, \
@@ -167,11 +167,11 @@ class Mgfbp_nmwj(Mgfbp):
         del self.img_sgm_filtered_taichi
         
         #sgm in taichi contains info in only one_view to save gpu memory
-        self.img_sgm_taichi = ti.field(dtype=ti.f32, shape=(self.dect_elem_count_vertical_actual,1, self.dect_elem_count_horizontal)) 
-        self.img_sgm_filtered_taichi = ti.field(dtype=ti.f32, shape=(self.dect_elem_count_vertical_actual,1,self.dect_elem_count_horizontal))
+        self.img_sgm_taichi = ti.field(dtype=ti.f32, shape=(self.det_elem_count_vertical_actual,1, self.det_elem_count_horizontal)) 
+        self.img_sgm_filtered_taichi = ti.field(dtype=ti.f32, shape=(self.det_elem_count_vertical_actual,1,self.det_elem_count_horizontal))
         
         if self.apply_gauss_vertical:
-            self.img_sgm_filtered_intermediate_taichi = ti.field(dtype=ti.f32, shape=(self.dect_elem_count_vertical_actual,1, self.dect_elem_count_horizontal))
+            self.img_sgm_filtered_intermediate_taichi = ti.field(dtype=ti.f32, shape=(self.det_elem_count_vertical_actual,1, self.det_elem_count_horizontal))
         else:
             self.img_sgm_filtered_intermediate_taichi = ti.field(dtype=ti.f32, shape=(1,1,1))
             #if vertical gauss filter is not applied, initialize this intermediate sgm with a small size to save GPU memory
@@ -183,43 +183,43 @@ class Mgfbp_nmwj(Mgfbp):
         
     
     def FilterSinogram(self):
-        self.ConvolveSgmAndKernel(self.dect_elem_count_vertical_actual,self.view_num,self.dect_elem_count_horizontal,\
-                                  self.dect_elem_width,self.img_sgm_taichi,self.array_recon_kernel_taichi,\
-                                      self.array_kernel_gauss_vertical_taichi,self.dect_elem_height, self.apply_gauss_vertical,
+        self.ConvolveSgmAndKernel(self.det_elem_count_vertical_actual,self.view_num,self.det_elem_count_horizontal,\
+                                  self.det_elem_width,self.img_sgm_taichi,self.array_recon_kernel_taichi,\
+                                      self.array_kernel_gauss_vertical_taichi,self.det_elem_height, self.apply_gauss_vertical,
                                       self.img_sgm_filtered_intermediate_taichi, self.img_sgm_filtered_taichi)
     @ti.kernel
-    def ConvolveSgmAndKernel(self, dect_elem_count_vertical_actual:ti.i32, view_num:ti.i32, \
-                             dect_elem_count_horizontal:ti.i32, dect_elem_width:ti.f32, img_sgm_taichi:ti.template(), \
+    def ConvolveSgmAndKernel(self, det_elem_count_vertical_actual:ti.i32, view_num:ti.i32, \
+                             det_elem_count_horizontal:ti.i32, det_elem_width:ti.f32, img_sgm_taichi:ti.template(), \
                                  array_recon_kernel_taichi:ti.template(),array_kernel_gauss_vertical_taichi:ti.template(),\
-                                     dect_elem_height:ti.f32, apply_gauss_vertical:ti.i32,img_sgm_filtered_intermediate_taichi:ti.template(),\
+                                     det_elem_height:ti.f32, apply_gauss_vertical:ti.i32,img_sgm_filtered_intermediate_taichi:ti.template(),\
                                          img_sgm_filtered_taichi:ti.template()):
         #apply filter along vertical direction
-        for i, k in ti.ndrange(dect_elem_count_vertical_actual, dect_elem_count_horizontal):
+        for i, k in ti.ndrange(det_elem_count_vertical_actual, det_elem_count_horizontal):
             temp_val = 0.0
             if apply_gauss_vertical:
                 # if vertical filter is applied, apply vertical filtering and 
                 # save the intermediate result to img_sgm_filtered_intermediate_taichi
-                for n in ti.ndrange(dect_elem_count_vertical_actual):
+                for n in ti.ndrange(det_elem_count_vertical_actual):
                     temp_val += img_sgm_taichi[n, 0, k] \
-                        * array_kernel_gauss_vertical_taichi[i + (dect_elem_count_vertical_actual - 1) - n]
-                img_sgm_filtered_intermediate_taichi[i, 0, k] = temp_val * dect_elem_height
+                        * array_kernel_gauss_vertical_taichi[i + (det_elem_count_vertical_actual - 1) - n]
+                img_sgm_filtered_intermediate_taichi[i, 0, k] = temp_val * det_elem_height
             else:
                 pass
                 
-        for i, k in ti.ndrange(dect_elem_count_vertical_actual, dect_elem_count_horizontal):
+        for i, k in ti.ndrange(det_elem_count_vertical_actual, det_elem_count_horizontal):
             temp_val = 0.0 
             if apply_gauss_vertical:
                 # if vertical filter is applied, use img_sgm_filtered_intermediate_taichi
                 # for horizontal filtering
-                for m in ti.ndrange(dect_elem_count_horizontal):
+                for m in ti.ndrange(det_elem_count_horizontal):
                     temp_val += img_sgm_filtered_intermediate_taichi[i, 0, m] \
-                        * array_recon_kernel_taichi[ k + (dect_elem_count_horizontal - 1) - m]
+                        * array_recon_kernel_taichi[ k + (det_elem_count_horizontal - 1) - m]
             else:
                 # if not, use img_sgm_taichi
-                for m in ti.ndrange(dect_elem_count_horizontal):
+                for m in ti.ndrange(det_elem_count_horizontal):
                     temp_val += img_sgm_taichi[i, 0, m] \
-                            * array_recon_kernel_taichi[ k + (dect_elem_count_horizontal - 1) - m]
-            img_sgm_filtered_taichi[i, 0, k] = temp_val * dect_elem_width
+                            * array_recon_kernel_taichi[ k + (det_elem_count_horizontal - 1) - m]
+            img_sgm_filtered_taichi[i, 0, k] = temp_val * det_elem_width
     
         
     @ti.kernel
@@ -230,12 +230,12 @@ class Mgfbp_nmwj(Mgfbp):
         
         
     @ti.kernel
-    def BackProjectionPixelDriven(self, dect_elem_count_vertical_actual:ti.i32, img_dim:ti.i32, dect_elem_count_horizontal:ti.i32, \
-                                  view_num:ti.i32, dect_elem_width:ti.f32,\
-                                  img_pix_size:ti.f32, source_isocenter_dis:ti.f32, source_dect_dis:ti.f32,total_scan_angle:ti.f32,\
+    def BackProjectionPixelDriven(self, det_elem_count_vertical_actual:ti.i32, img_dim:ti.i32, det_elem_count_horizontal:ti.i32, \
+                                  view_num:ti.i32, det_elem_width:ti.f32,\
+                                  img_pix_size:ti.f32, source_isocenter_dis:ti.f32, source_det_dis:ti.f32,total_scan_angle:ti.f32,\
                                       array_angle_taichi:ti.template(),img_rot:ti.f32,img_sgm_filtered_taichi:ti.template(),\
                                           img_recon_taichi:ti.template(),\
-                                          array_u_taichi:ti.template(), short_scan:ti.i32,cone_beam:ti.i32,dect_elem_height:ti.f32,\
+                                          array_u_taichi:ti.template(), short_scan:ti.i32,cone_beam:ti.i32,det_elem_height:ti.f32,\
                                               array_v_taichi:ti.template(),img_dim_z:ti.i32,img_voxel_height:ti.f32, \
                                                   img_center_x:ti.f32,img_center_y:ti.f32,img_center_z:ti.f32,curved_dect:ti.i32,\
                                                       bool_apply_pmatrix:ti.i32, array_pmatrix_taichi:ti.template(), \
@@ -272,19 +272,19 @@ class Mgfbp_nmwj(Mgfbp):
             
             beta = ti.asin(t/source_isocenter_dis)
             l = source_isocenter_dis * ti.cos(beta) - x*ti.cos(theta) - y * ti.sin(theta)
-            source_to_element_xy = source_isocenter_dis * ti.cos(beta) + ti.sqrt( (source_dect_dis - source_isocenter_dis)**2 - t **2 )
+            source_to_element_xy = source_isocenter_dis * ti.cos(beta) + ti.sqrt( (source_det_dis - source_isocenter_dis)**2 - t **2 )
             v = source_to_element_xy / l * (z - (z_source- beta * dis_per_rad))
             cone_weight = source_to_element_xy / ti.sqrt(source_to_element_xy**2 + v**2)
-            u_idx = (t - array_u_taichi[0]) / dect_elem_width
-            v_idx = (v - array_v_taichi[0]) / (-dect_elem_height)
+            u_idx = (t - array_u_taichi[0]) / det_elem_width
+            v_idx = (v - array_v_taichi[0]) / (-det_elem_height)
             
             u_idx_floor = int(ti.floor(u_idx))
             v_idx_floor = int(ti.floor(v_idx))
             
             Q = 0.9
             w_q = 0.0
-            if u_idx_floor >=0 and u_idx_floor <= dect_elem_count_horizontal-2 \
-                and v_idx_floor >=0 and v_idx_floor <= dect_elem_count_vertical_actual-2\
+            if u_idx_floor >=0 and u_idx_floor <= det_elem_count_horizontal-2 \
+                and v_idx_floor >=0 and v_idx_floor <= det_elem_count_vertical_actual-2\
                     and alpha > angle_min and alpha < angle_max:
                     q = v / array_v_taichi[0] # array_v_taichi[0] is the maximum value of array_v_taichi
                     if q > Q:

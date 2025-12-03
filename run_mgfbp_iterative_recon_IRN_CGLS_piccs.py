@@ -72,9 +72,9 @@ class Mgfbp_ir_piccs(Mgfbp_ir):
         if not self.bool_uneven_scan_angle:
             self.GenerateAngleArray(
                 self.view_num, self.img_rot, self.total_scan_angle, self.array_angle_taichi)
-        self.GenerateDectPixPosArrayFPJ(self.dect_elem_count_vertical, - self.dect_elem_height, self.dect_offset_vertical, self.array_v_taichi)
-        self.GenerateDectPixPosArrayFPJ(self.dect_elem_count_horizontal*self.oversample_size,-self.dect_elem_width/self.oversample_size,
-                                     -self.dect_offset_horizontal, self.array_u_taichi)
+        self.GenerateDectPixPosArrayFPJ(self.det_elem_count_vertical, - self.det_elem_height, self.det_offset_vertical, self.array_v_taichi)
+        self.GenerateDectPixPosArrayFPJ(self.det_elem_count_horizontal*self.oversample_size,-self.det_elem_width/self.oversample_size,
+                                     -self.det_offset_horizontal, self.array_u_taichi)
         self.file_processed_count = 0;#record the number of files processed
         
         for file in os.listdir(self.input_dir):

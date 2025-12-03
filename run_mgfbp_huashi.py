@@ -52,21 +52,21 @@ class Mgfbp_huashi(Mgfbp):
                     self.file_processed_count += 1 
                     print('\nReconstructing %s ...' % self.input_path)
                     if self.bool_bh_correction:
-                        self.BHCorrection(self.dect_elem_count_vertical_actual, self.view_num, self.dect_elem_count_horizontal,self.img_sgm,\
+                        self.BHCorrection(self.det_elem_count_vertical_actual, self.view_num, self.det_elem_count_horizontal,self.img_sgm,\
                                           self.array_bh_coefficients_taichi,self.bh_corr_order)#pass img_sgm directly into this function using unified memory
-                    self.WeightSgm(self.dect_elem_count_vertical_actual,self.short_scan,self.curved_dect,\
-                                   self.total_scan_angle,self.view_num,self.dect_elem_count_horizontal,\
-                                       self.source_dect_dis,self.img_sgm,\
+                    self.WeightSgm(self.det_elem_count_vertical_actual,self.short_scan,self.curved_dect,\
+                                   self.total_scan_angle,self.view_num,self.det_elem_count_horizontal,\
+                                       self.source_det_dis,self.img_sgm,\
                                            self.array_u_taichi,self.array_v_taichi,self.array_angle_taichi)#pass img_sgm directly into this function using unified memory
                     print('Filtering sinogram ...')
                     self.FilterSinogram()
                     self.SaveFilteredSinogram()
                                         
                     print('Back Projection ...')
-                    self.BackProjectionPixelDriven(self.dect_elem_count_vertical_actual, self.img_dim, self.dect_elem_count_horizontal, \
-                                    self.view_num, self.dect_elem_width,self.img_pix_size, self.source_isocenter_dis, self.source_dect_dis,self.total_scan_angle,\
+                    self.BackProjectionPixelDriven(self.det_elem_count_vertical_actual, self.img_dim, self.det_elem_count_horizontal, \
+                                    self.view_num, self.det_elem_width,self.img_pix_size, self.source_isocenter_dis, self.source_det_dis,self.total_scan_angle,\
                                     self.array_angle_taichi, self.img_rot,self.img_sgm_filtered_taichi,self.img_recon_taichi,\
-                                    self.array_u_taichi,self.short_scan,self.cone_beam,self.dect_elem_height,\
+                                    self.array_u_taichi,self.short_scan,self.cone_beam,self.det_elem_height,\
                                         self.array_v_taichi,self.img_dim_z,self.img_voxel_height,\
                                             self.img_center_x,self.img_center_y,self.img_center_z,self.curved_dect,\
                                                 self.bool_apply_pmatrix,self.array_pmatrix_taichi, self.recon_view_mode, self.img_rot_y, self.det_rot)
@@ -101,11 +101,11 @@ class Mgfbp_huashi(Mgfbp):
         # all angular variables are in rad unit
               
     @ti.kernel
-    def BackProjectionPixelDriven(self, dect_elem_count_vertical_actual:ti.i32, img_dim:ti.i32, dect_elem_count_horizontal:ti.i32, \
-                                  view_num:ti.i32, dect_elem_width:ti.f32,\
-                                  img_pix_size:ti.f32, source_isocenter_dis:ti.f32, source_dect_dis:ti.f32,total_scan_angle:ti.f32,\
+    def BackProjectionPixelDriven(self, det_elem_count_vertical_actual:ti.i32, img_dim:ti.i32, det_elem_count_horizontal:ti.i32, \
+                                  view_num:ti.i32, det_elem_width:ti.f32,\
+                                  img_pix_size:ti.f32, source_isocenter_dis:ti.f32, source_det_dis:ti.f32,total_scan_angle:ti.f32,\
                                       array_angle_taichi:ti.template(),img_rot:ti.f32,img_sgm_filtered_taichi:ti.template(),img_recon_taichi:ti.template(),\
-                                          array_u_taichi:ti.template(), short_scan:ti.i32,cone_beam:ti.i32,dect_elem_height:ti.f32,\
+                                          array_u_taichi:ti.template(), short_scan:ti.i32,cone_beam:ti.i32,det_elem_height:ti.f32,\
                                               array_v_taichi:ti.template(),img_dim_z:ti.i32,img_voxel_height:ti.f32, \
                                                   img_center_x:ti.f32,img_center_y:ti.f32,img_center_z:ti.f32,curved_dect:ti.i32,\
                                                       bool_apply_pmatrix:ti.i32, array_pmatrix_taichi:ti.template(), recon_view_mode: ti.i32, img_rot_y: ti.f32, det_rot:ti.f32):
@@ -174,37 +174,37 @@ class Mgfbp_huashi(Mgfbp):
                     pix_to_source_parallel_dis = 0.0
                     mag_factor = 0.0
                     temp_u_idx_floor = 0
-                    pix_proj_to_dect_u = 0.0
-                    pix_proj_to_dect_v = 0.0
-                    pix_proj_to_dect_u_idx = 0.0
-                    pix_proj_to_dect_v_idx = 0.0
+                    pix_proj_to_det_u = 0.0
+                    pix_proj_to_det_v = 0.0
+                    pix_proj_to_det_u_idx = 0.0
+                    pix_proj_to_det_v_idx = 0.0
                     ratio_u = 0.0
                     ratio_v = 0.0
                     angle_this_view_exclude_img_rot = array_angle_taichi[j] - img_rot
                     
                     pix_to_source_parallel_dis = source_isocenter_dis - x * ti.cos(angle_this_view_exclude_img_rot) - y * ti.sin(angle_this_view_exclude_img_rot)
                     if bool_apply_pmatrix == 0:
-                        mag_factor = source_dect_dis / pix_to_source_parallel_dis
+                        mag_factor = source_det_dis / pix_to_source_parallel_dis
                         y_after_rotation_angle_this_view = - x*ti.sin(angle_this_view_exclude_img_rot) + y*ti.cos(angle_this_view_exclude_img_rot)
                         if curved_dect:
-                            pix_proj_to_dect_u = source_dect_dis * ti.atan2(y_after_rotation_angle_this_view, pix_to_source_parallel_dis)
+                            pix_proj_to_det_u = source_det_dis * ti.atan2(y_after_rotation_angle_this_view, pix_to_source_parallel_dis)
                         else:
-                            pix_proj_to_dect_u = mag_factor * y_after_rotation_angle_this_view
-                        pix_proj_to_dect_u_idx = (pix_proj_to_dect_u - array_u_taichi[0]) / (array_u_taichi[1] - array_u_taichi[0])
+                            pix_proj_to_det_u = mag_factor * y_after_rotation_angle_this_view
+                        pix_proj_to_det_u_idx = (pix_proj_to_det_u - array_u_taichi[0]) / (array_u_taichi[1] - array_u_taichi[0])
                     else:
                         mag_factor = 1.0 / (array_pmatrix_taichi[12*j + 8] * x +\
                             array_pmatrix_taichi[12*j + 9] * y +\
                                 array_pmatrix_taichi[12*j + 10] * z +\
                                     array_pmatrix_taichi[12*j + 11] * 1)
-                        pix_proj_to_dect_u_idx = (array_pmatrix_taichi[12*j + 0] * x +\
+                        pix_proj_to_det_u_idx = (array_pmatrix_taichi[12*j + 0] * x +\
                             array_pmatrix_taichi[12*j + 1] * y +\
                                 array_pmatrix_taichi[12*j + 2] * z +\
                                     array_pmatrix_taichi[12*j + 3] * 1) * mag_factor
-                    if pix_proj_to_dect_u_idx < 0 or  pix_proj_to_dect_u_idx + 1 > dect_elem_count_horizontal - 1:
+                    if pix_proj_to_det_u_idx < 0 or  pix_proj_to_det_u_idx + 1 > det_elem_count_horizontal - 1:
                         img_recon_taichi[i_z, i_y, i_x] = 0
                         break
-                    temp_u_idx_floor = int(ti.floor(pix_proj_to_dect_u_idx))
-                    ratio_u = pix_proj_to_dect_u_idx - temp_u_idx_floor
+                    temp_u_idx_floor = int(ti.floor(pix_proj_to_det_u_idx))
+                    ratio_u = pix_proj_to_det_u_idx - temp_u_idx_floor
                                         
                     
                     distance_weight = 0.0
@@ -217,47 +217,47 @@ class Mgfbp_huashi(Mgfbp):
 
                     if cone_beam == True:
                         if bool_apply_pmatrix == 0:
-                            pix_proj_to_dect_v = mag_factor * z
-                            pix_proj_to_dect_v_idx = (pix_proj_to_dect_v - array_v_taichi[0]) / dect_elem_height \
+                            pix_proj_to_det_v = mag_factor * z
+                            pix_proj_to_det_v_idx = (pix_proj_to_det_v - array_v_taichi[0]) / det_elem_height \
                                 * abs(array_v_taichi[1] - array_v_taichi[0]) / (array_v_taichi[1] - array_v_taichi[0])
                                 #abs(array_v_taichi[1] - array_v_taichi[0]) / (array_v_taichi[1] - array_v_taichi[0]) defines whether the first 
                                 #sinogram slice corresponds to the top row
                             
                             #huashi
-                            pix_proj_to_dect_u_rot = pix_proj_to_dect_u * ti.cos(det_rot) + pix_proj_to_dect_v* ti.sin(det_rot)
-                            pix_proj_to_dect_v_rot = -pix_proj_to_dect_u* ti.sin(det_rot) + pix_proj_to_dect_v* ti.cos(det_rot)
+                            pix_proj_to_det_u_rot = pix_proj_to_det_u * ti.cos(det_rot) + pix_proj_to_det_v* ti.sin(det_rot)
+                            pix_proj_to_det_v_rot = -pix_proj_to_det_u* ti.sin(det_rot) + pix_proj_to_det_v* ti.cos(det_rot)
                             
-                            pix_proj_to_dect_u_idx = (pix_proj_to_dect_u_rot - array_u_taichi[0]) / (array_u_taichi[1] - array_u_taichi[0])
+                            pix_proj_to_det_u_idx = (pix_proj_to_det_u_rot - array_u_taichi[0]) / (array_u_taichi[1] - array_u_taichi[0])
                             
-                            pix_proj_to_dect_v_idx = (pix_proj_to_dect_v_rot - array_v_taichi[0]) / dect_elem_height \
+                            pix_proj_to_det_v_idx = (pix_proj_to_det_v_rot - array_v_taichi[0]) / det_elem_height \
                                 * abs(array_v_taichi[1] - array_v_taichi[0]) / (array_v_taichi[1] - array_v_taichi[0])
                             
-                            temp_u_idx_floor = int(ti.floor(pix_proj_to_dect_u_idx))
-                            ratio_u = pix_proj_to_dect_u_idx - temp_u_idx_floor
+                            temp_u_idx_floor = int(ti.floor(pix_proj_to_det_u_idx))
+                            ratio_u = pix_proj_to_det_u_idx - temp_u_idx_floor
 
                             
                         else:
-                            pix_proj_to_dect_v_idx = (array_pmatrix_taichi[12*j + 4] * x +\
+                            pix_proj_to_det_v_idx = (array_pmatrix_taichi[12*j + 4] * x +\
                                 array_pmatrix_taichi[12*j + 5] * y +\
                                     array_pmatrix_taichi[12*j + 6] * z +\
                                         array_pmatrix_taichi[12*j + 7] * 1) * mag_factor
                                 
-                        temp_v_idx_floor = int(ti.floor(pix_proj_to_dect_v_idx)) 
-                        if temp_v_idx_floor < -1 or temp_v_idx_floor + 1 > dect_elem_count_vertical_actual: #mark
+                        temp_v_idx_floor = int(ti.floor(pix_proj_to_det_v_idx)) 
+                        if temp_v_idx_floor < -1 or temp_v_idx_floor + 1 > det_elem_count_vertical_actual: #mark
                             img_recon_taichi[i_z, i_y, i_x] += 0
                             #break
                         else:
-                            ratio_v = pix_proj_to_dect_v_idx - temp_v_idx_floor
+                            ratio_v = pix_proj_to_det_v_idx - temp_v_idx_floor
                             if temp_v_idx_floor == -1: #huashi
                                 part_0 = 0
                                 part_1 = img_sgm_filtered_taichi[0,j,temp_u_idx_floor] * (1 - ratio_u) +\
                                       img_sgm_filtered_taichi[0,j,temp_u_idx_floor + 1] * ratio_u
                                 img_recon_taichi[i_z, i_y, i_x] += (source_isocenter_dis * distance_weight) * \
                                     ((1 - ratio_v) * part_0 + ratio_v * part_1) * delta_angle * div_factor
-                            elif temp_v_idx_floor == dect_elem_count_vertical_actual-1: #huashi
+                            elif temp_v_idx_floor == det_elem_count_vertical_actual-1: #huashi
                                 part_1 = 0
-                                part_0 = img_sgm_filtered_taichi[dect_elem_count_vertical_actual-1,j,temp_u_idx_floor] * (1 - ratio_u) + \
-                                    img_sgm_filtered_taichi[dect_elem_count_vertical_actual-1,j,temp_u_idx_floor + 1] * ratio_u
+                                part_0 = img_sgm_filtered_taichi[det_elem_count_vertical_actual-1,j,temp_u_idx_floor] * (1 - ratio_u) + \
+                                    img_sgm_filtered_taichi[det_elem_count_vertical_actual-1,j,temp_u_idx_floor + 1] * ratio_u
                                 img_recon_taichi[i_z, i_y, i_x] += (source_isocenter_dis * distance_weight) * \
                                     ((1 - ratio_v) * part_0 + ratio_v * part_1) * delta_angle * div_factor
                             else:

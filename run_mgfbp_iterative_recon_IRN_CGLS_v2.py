@@ -108,7 +108,7 @@ class Mgfbp_ir(Mgfpj):
             self.helical_pitch = 0.0
         
         self.img_sgm_taichi = ti.field(dtype=ti.f32, shape=(
-            self.dect_elem_count_vertical_actual, self.view_num, self.dect_elem_count_horizontal), order='ijk')
+            self.det_elem_count_vertical_actual, self.view_num, self.det_elem_count_horizontal), order='ijk')
         
         self.img_recon = np.zeros((self.img_dim_z,self.img_dim, self.img_dim),dtype=np.float32)
 
@@ -121,12 +121,12 @@ class Mgfbp_ir(Mgfpj):
         self.img_bp_b = np.zeros((self.img_dim_z,self.img_dim, self.img_dim),dtype=np.float32)
         self.img_bp_b_taichi = ti.field(dtype=ti.f32, shape=(self.img_dim_z, self.img_dim, self.img_dim))
         
-        self.img_fp_x = np.zeros((self.dect_elem_count_vertical_actual, self.view_num, self.dect_elem_count_horizontal), dtype=np.float32)
+        self.img_fp_x = np.zeros((self.det_elem_count_vertical_actual, self.view_num, self.det_elem_count_horizontal), dtype=np.float32)
         self.img_fp_x_taichi = ti.field(dtype=ti.f32, shape=(
-            self.dect_elem_count_vertical_actual, self.view_num, self.dect_elem_count_horizontal), order='ijk')
+            self.det_elem_count_vertical_actual, self.view_num, self.det_elem_count_horizontal), order='ijk')
         
         self.img_fp_x_taichi_single_slice = ti.field(dtype=ti.f32, shape=(
-            1, self.view_num, self.dect_elem_count_horizontal), order='ijk')
+            1, self.view_num, self.det_elem_count_horizontal), order='ijk')
 
         
         self.img_d_taichi = ti.field(dtype=ti.f32, shape=(self.img_dim_z, self.img_dim, self.img_dim))
@@ -139,14 +139,14 @@ class Mgfbp_ir(Mgfpj):
         self.img_bp_fp_d = np.zeros((self.img_dim_z,self.img_dim, self.img_dim),dtype=np.float32)
         self.img_bp_fp_d_taichi = ti.field(dtype=ti.f32, shape=(self.img_dim_z, self.img_dim, self.img_dim))
 
-        self.img_fp_d = np.zeros((self.dect_elem_count_vertical_actual, self.view_num, self.dect_elem_count_horizontal), dtype=np.float32)
+        self.img_fp_d = np.zeros((self.det_elem_count_vertical_actual, self.view_num, self.det_elem_count_horizontal), dtype=np.float32)
         self.img_fp_d_taichi = ti.field(dtype=ti.f32, shape=(
-            self.dect_elem_count_vertical_actual, self.view_num, self.dect_elem_count_horizontal), order='ijk')
+            self.det_elem_count_vertical_actual, self.view_num, self.det_elem_count_horizontal), order='ijk')
         
         self.img_fp_d_taichi_single_slice = ti.field(dtype=ti.f32, shape=(
-            1, self.view_num, self.dect_elem_count_horizontal), order='ijk')
+            1, self.view_num, self.det_elem_count_horizontal), order='ijk')
         
-        self.sgm_total_pixel_count = self.dect_elem_count_vertical_actual*self.view_num*self.dect_elem_count_horizontal
+        self.sgm_total_pixel_count = self.det_elem_count_vertical_actual*self.view_num*self.det_elem_count_horizontal
         self.img_total_pixel_count = self.img_dim_z * self.img_dim * self.img_dim
         self.pixel_count_ratio = float( self.sgm_total_pixel_count/self.img_total_pixel_count)
         
@@ -168,30 +168,30 @@ class Mgfbp_ir(Mgfpj):
                     self.img_sgm_taichi.from_numpy(self.img_sgm)
                     
                     #P^T b
-                    self.BackProjectionPixelDriven(self.dect_elem_count_vertical_actual, self.img_dim, self.dect_elem_count_horizontal, \
-                                    self.view_num, self.dect_elem_width,self.img_pix_size, self.source_isocenter_dis, self.source_dect_dis,self.total_scan_angle,\
+                    self.BackProjectionPixelDriven(self.det_elem_count_vertical_actual, self.img_dim, self.det_elem_count_horizontal, \
+                                    self.view_num, self.det_elem_width,self.img_pix_size, self.source_isocenter_dis, self.source_det_dis,self.total_scan_angle,\
                                     self.array_angle_taichi, self.img_rot,self.img_sgm_taichi,self.img_bp_b_taichi,\
-                                    self.array_u_taichi,self.short_scan,self.cone_beam,self.dect_elem_height,\
+                                    self.array_u_taichi,self.short_scan,self.cone_beam,self.det_elem_height,\
                                         self.array_v_taichi,self.img_dim_z,self.img_voxel_height,\
                                             self.img_center_x,self.img_center_y,self.img_center_z,self.curved_dect,\
                                                 self.bool_apply_pmatrix,self.array_pmatrix_taichi, self.recon_view_mode)
                     
                     for irn_iter_idx in range(4):
-                        for v_idx in range(self.dect_elem_count_vertical_actual):                              
+                        for v_idx in range(self.det_elem_count_vertical_actual):                              
                             self.ForwardProjectionBilinear(self.img_x_taichi, self.img_fp_x_taichi_single_slice, self.array_u_taichi,
                                                            self.array_v_taichi, self.array_angle_taichi, self.img_dim, self.img_dim_z,
-                                                           self.dect_elem_count_horizontal,
-                                                           self.dect_elem_count_vertical, self.view_num, self.img_pix_size, self.img_voxel_height,
-                                                           self.source_isocenter_dis, self.source_dect_dis, self.cone_beam,
+                                                           self.det_elem_count_horizontal,
+                                                           self.det_elem_count_vertical, self.view_num, self.img_pix_size, self.img_voxel_height,
+                                                           self.source_isocenter_dis, self.source_det_dis, self.cone_beam,
                                                            self.helical_scan, self.helical_pitch, v_idx, self.fpj_step_size,
                                                            self.img_center_x, self.img_center_y, self.img_center_z, self.curved_dect,
                                                            self.matrix_A_each_view_taichi, self.x_s_each_view_taichi, self.bool_apply_pmatrix)
-                            self.TaichiReadFromSingleSlice(self.img_fp_x_taichi,self.img_fp_x_taichi_single_slice,v_idx,self.view_num,self.dect_elem_count_horizontal)
+                            self.TaichiReadFromSingleSlice(self.img_fp_x_taichi,self.img_fp_x_taichi_single_slice,v_idx,self.view_num,self.det_elem_count_horizontal)
                         #P^T P x
-                        self.BackProjectionPixelDriven(self.dect_elem_count_vertical_actual, self.img_dim, self.dect_elem_count_horizontal, \
-                                        self.view_num, self.dect_elem_width,self.img_pix_size, self.source_isocenter_dis, self.source_dect_dis,self.total_scan_angle,\
+                        self.BackProjectionPixelDriven(self.det_elem_count_vertical_actual, self.img_dim, self.det_elem_count_horizontal, \
+                                        self.view_num, self.det_elem_width,self.img_pix_size, self.source_isocenter_dis, self.source_det_dis,self.total_scan_angle,\
                                         self.array_angle_taichi, self.img_rot,self.img_fp_x_taichi,self.img_bp_fp_x_taichi,\
-                                        self.array_u_taichi,self.short_scan,self.cone_beam,self.dect_elem_height,\
+                                        self.array_u_taichi,self.short_scan,self.cone_beam,self.det_elem_height,\
                                             self.array_v_taichi,self.img_dim_z,self.img_voxel_height,\
                                                 self.img_center_x,self.img_center_y,self.img_center_z,self.curved_dect,\
                                                     self.bool_apply_pmatrix,self.array_pmatrix_taichi, self.recon_view_mode)
@@ -208,25 +208,25 @@ class Mgfbp_ir(Mgfpj):
                         for idx in range(self.num_iter):
                             #P^T P d
                             self.img_d_taichi.from_numpy(self.img_d)
-                            for v_idx in range(self.dect_elem_count_vertical_actual):
+                            for v_idx in range(self.det_elem_count_vertical_actual):
                                 str_0 = 'Running IRN iterations: %4d/%4d; ' % (irn_iter_idx+1, 15)
                                 str_1 = 'Running iterations: %4d/%4d; ' % (idx+1, self.num_iter)
-                                str_2 = 'fpj slice: %4d/%4d' % (v_idx+1, self.dect_elem_count_vertical_actual)
+                                str_2 = 'fpj slice: %4d/%4d' % (v_idx+1, self.det_elem_count_vertical_actual)
                                 print('\r' + str_0 + str_1 + str_2, end='')    
                                 self.ForwardProjectionBilinear(self.img_d_taichi, self.img_fp_d_taichi_single_slice, self.array_u_taichi,
                                                                self.array_v_taichi, self.array_angle_taichi, self.img_dim, self.img_dim_z,
-                                                               self.dect_elem_count_horizontal,
-                                                               self.dect_elem_count_vertical, self.view_num, self.img_pix_size, self.img_voxel_height,
-                                                               self.source_isocenter_dis, self.source_dect_dis, self.cone_beam,
+                                                               self.det_elem_count_horizontal,
+                                                               self.det_elem_count_vertical, self.view_num, self.img_pix_size, self.img_voxel_height,
+                                                               self.source_isocenter_dis, self.source_det_dis, self.cone_beam,
                                                                self.helical_scan, self.helical_pitch, v_idx, self.fpj_step_size,
                                                                self.img_center_x, self.img_center_y, self.img_center_z, self.curved_dect,
                                                                self.matrix_A_each_view_taichi, self.x_s_each_view_taichi, self.bool_apply_pmatrix)
-                                self.TaichiReadFromSingleSlice(self.img_fp_d_taichi,self.img_fp_d_taichi_single_slice,v_idx,self.view_num,self.dect_elem_count_horizontal)
+                                self.TaichiReadFromSingleSlice(self.img_fp_d_taichi,self.img_fp_d_taichi_single_slice,v_idx,self.view_num,self.det_elem_count_horizontal)
                             #P^T P d
-                            self.BackProjectionPixelDriven(self.dect_elem_count_vertical_actual, self.img_dim, self.dect_elem_count_horizontal, \
-                                            self.view_num, self.dect_elem_width,self.img_pix_size, self.source_isocenter_dis, self.source_dect_dis,self.total_scan_angle,\
+                            self.BackProjectionPixelDriven(self.det_elem_count_vertical_actual, self.img_dim, self.det_elem_count_horizontal, \
+                                            self.view_num, self.det_elem_width,self.img_pix_size, self.source_isocenter_dis, self.source_det_dis,self.total_scan_angle,\
                                             self.array_angle_taichi, self.img_rot,self.img_fp_d_taichi,self.img_bp_fp_d_taichi,\
-                                            self.array_u_taichi,self.short_scan,self.cone_beam,self.dect_elem_height,\
+                                            self.array_u_taichi,self.short_scan,self.cone_beam,self.det_elem_height,\
                                                 self.array_v_taichi,self.img_dim_z,self.img_voxel_height,\
                                                     self.img_center_x,self.img_center_y,self.img_center_z,self.curved_dect,\
                                                         self.bool_apply_pmatrix,self.array_pmatrix_taichi, self.recon_view_mode)
@@ -297,11 +297,11 @@ class Mgfbp_ir(Mgfpj):
         return output
     
     @ti.kernel
-    def BackProjectionPixelDriven(self, dect_elem_count_vertical_actual:ti.i32, img_dim:ti.i32, dect_elem_count_horizontal:ti.i32, \
-                                  view_num:ti.i32, dect_elem_width:ti.f32,\
-                                  img_pix_size:ti.f32, source_isocenter_dis:ti.f32, source_dect_dis:ti.f32,total_scan_angle:ti.f32,\
+    def BackProjectionPixelDriven(self, det_elem_count_vertical_actual:ti.i32, img_dim:ti.i32, det_elem_count_horizontal:ti.i32, \
+                                  view_num:ti.i32, det_elem_width:ti.f32,\
+                                  img_pix_size:ti.f32, source_isocenter_dis:ti.f32, source_det_dis:ti.f32,total_scan_angle:ti.f32,\
                                       array_angle_taichi:ti.template(),img_rot:ti.f32,img_sgm_filtered_taichi:ti.template(),img_recon_taichi:ti.template(),\
-                                          array_u_taichi:ti.template(), short_scan:ti.i32,cone_beam:ti.i32,dect_elem_height:ti.f32,\
+                                          array_u_taichi:ti.template(), short_scan:ti.i32,cone_beam:ti.i32,det_elem_height:ti.f32,\
                                               array_v_taichi:ti.template(),img_dim_z:ti.i32,img_voxel_height:ti.f32, \
                                                   img_center_x:ti.f32,img_center_y:ti.f32,img_center_z:ti.f32,curved_dect:ti.i32,\
                                                       bool_apply_pmatrix:ti.i32, array_pmatrix_taichi:ti.template(), recon_view_mode: ti.i32):
@@ -330,36 +330,36 @@ class Mgfbp_ir(Mgfpj):
                     pix_to_source_parallel_dis = 0.0
                     mag_factor = 0.0
                     temp_u_idx_floor = 0
-                    pix_proj_to_dect_u = 0.0
-                    pix_proj_to_dect_v = 0.0
-                    pix_proj_to_dect_u_idx = 0.0
-                    pix_proj_to_dect_v_idx = 0.0
+                    pix_proj_to_det_u = 0.0
+                    pix_proj_to_det_v = 0.0
+                    pix_proj_to_det_u_idx = 0.0
+                    pix_proj_to_det_v_idx = 0.0
                     ratio_u = 0.0
                     ratio_v = 0.0
                     angle_this_view_exclude_img_rot = array_angle_taichi[j] - img_rot
                     
                     pix_to_source_parallel_dis = source_isocenter_dis - x * ti.cos(angle_this_view_exclude_img_rot) - y * ti.sin(angle_this_view_exclude_img_rot)
                     if bool_apply_pmatrix == 0:
-                        mag_factor = source_dect_dis / pix_to_source_parallel_dis
+                        mag_factor = source_det_dis / pix_to_source_parallel_dis
                         if curved_dect:
-                            pix_proj_to_dect_u = source_dect_dis * ti.atan2(x*ti.sin(angle_this_view_exclude_img_rot)-y*ti.cos(angle_this_view_exclude_img_rot),pix_to_source_parallel_dis)
+                            pix_proj_to_det_u = source_det_dis * ti.atan2(x*ti.sin(angle_this_view_exclude_img_rot)-y*ti.cos(angle_this_view_exclude_img_rot),pix_to_source_parallel_dis)
                         else:
-                            pix_proj_to_dect_u = mag_factor * (x*ti.sin(angle_this_view_exclude_img_rot)-y*ti.cos(angle_this_view_exclude_img_rot))
-                        pix_proj_to_dect_u_idx = (pix_proj_to_dect_u - array_u_taichi[0]) / dect_elem_width
+                            pix_proj_to_det_u = mag_factor * (x*ti.sin(angle_this_view_exclude_img_rot)-y*ti.cos(angle_this_view_exclude_img_rot))
+                        pix_proj_to_det_u_idx = (pix_proj_to_det_u - array_u_taichi[0]) / det_elem_width
                     else:
                         mag_factor = 1.0 / (array_pmatrix_taichi[12*j + 8] * x +\
                             array_pmatrix_taichi[12*j + 9] * y +\
                                 array_pmatrix_taichi[12*j + 10] * z +\
                                     array_pmatrix_taichi[12*j + 11] * 1)
-                        pix_proj_to_dect_u_idx = (array_pmatrix_taichi[12*j + 0] * x +\
+                        pix_proj_to_det_u_idx = (array_pmatrix_taichi[12*j + 0] * x +\
                             array_pmatrix_taichi[12*j + 1] * y +\
                                 array_pmatrix_taichi[12*j + 2] * z +\
                                     array_pmatrix_taichi[12*j + 3] * 1) * mag_factor
-                    if pix_proj_to_dect_u_idx < 0 or  pix_proj_to_dect_u_idx + 1 > dect_elem_count_horizontal - 1:
+                    if pix_proj_to_det_u_idx < 0 or  pix_proj_to_det_u_idx + 1 > det_elem_count_horizontal - 1:
                         img_recon_taichi[i_z, i_y, i_x] = 0
                         break
-                    temp_u_idx_floor = int(ti.floor(pix_proj_to_dect_u_idx))
-                    ratio_u = pix_proj_to_dect_u_idx - temp_u_idx_floor
+                    temp_u_idx_floor = int(ti.floor(pix_proj_to_det_u_idx))
+                    ratio_u = pix_proj_to_det_u_idx - temp_u_idx_floor
                                         
                     
                     distance_weight = 0.0
@@ -372,23 +372,23 @@ class Mgfbp_ir(Mgfpj):
 
                     if cone_beam == True:
                         if bool_apply_pmatrix == 0:
-                            pix_proj_to_dect_v = mag_factor * z
-                            pix_proj_to_dect_v_idx = (pix_proj_to_dect_v - array_v_taichi[0]) / dect_elem_height \
+                            pix_proj_to_det_v = mag_factor * z
+                            pix_proj_to_det_v_idx = (pix_proj_to_det_v - array_v_taichi[0]) / det_elem_height \
                                 * abs(array_v_taichi[1] - array_v_taichi[0]) / (array_v_taichi[1] - array_v_taichi[0])
                                 #abs(array_v_taichi[1] - array_v_taichi[0]) / (array_v_taichi[1] - array_v_taichi[0]) defines whether the first 
                                 #sinogram slice corresponds to the top row
                         else:
-                            pix_proj_to_dect_v_idx = (array_pmatrix_taichi[12*j + 4] * x +\
+                            pix_proj_to_det_v_idx = (array_pmatrix_taichi[12*j + 4] * x +\
                                 array_pmatrix_taichi[12*j + 5] * y +\
                                     array_pmatrix_taichi[12*j + 6] * z +\
                                         array_pmatrix_taichi[12*j + 7] * 1) * mag_factor
                                 
-                        temp_v_idx_floor = int(ti.floor(pix_proj_to_dect_v_idx))   #mark
-                        if temp_v_idx_floor < 0 or temp_v_idx_floor + 1 > dect_elem_count_vertical_actual - 1: 
+                        temp_v_idx_floor = int(ti.floor(pix_proj_to_det_v_idx))   #mark
+                        if temp_v_idx_floor < 0 or temp_v_idx_floor + 1 > det_elem_count_vertical_actual - 1: 
                             img_recon_taichi[i_z, i_y, i_x] = 0
                             break
                         else:
-                            ratio_v = pix_proj_to_dect_v_idx - temp_v_idx_floor
+                            ratio_v = pix_proj_to_det_v_idx - temp_v_idx_floor
                             part_0 = img_sgm_filtered_taichi[temp_v_idx_floor,j,temp_u_idx_floor] * (1 - ratio_u) + \
                                 img_sgm_filtered_taichi[temp_v_idx_floor,j,temp_u_idx_floor + 1] * ratio_u
                             part_1 = img_sgm_filtered_taichi[temp_v_idx_floor + 1,j,temp_u_idx_floor] * (1 - ratio_u) +\

@@ -75,19 +75,19 @@ class Mgfbp_v2(Mgfbp):
                         print('\r' + str, end='')
                         self.img_sgm_taichi.from_numpy(self.img_sgm[:,view_idx:view_idx+1,:])
                         if self.bool_bh_correction:
-                            self.BHCorrection(self.dect_elem_count_vertical_actual, self.view_num, self.dect_elem_count_horizontal,self.img_sgm_taichi,\
+                            self.BHCorrection(self.det_elem_count_vertical_actual, self.view_num, self.det_elem_count_horizontal,self.img_sgm_taichi,\
                                               self.array_bh_coefficients_taichi,self.bh_corr_order)#pass img_sgm directly into this function using unified memory
-                        self.WeightSgm(self.dect_elem_count_vertical_actual,self.short_scan,self.curved_dect,\
-                                       self.total_scan_angle,self.view_num,self.dect_elem_count_horizontal,\
-                                           self.source_dect_dis,self.img_sgm_taichi,\
+                        self.WeightSgm(self.det_elem_count_vertical_actual,self.short_scan,self.curved_dect,\
+                                       self.total_scan_angle,self.view_num,self.det_elem_count_horizontal,\
+                                           self.source_det_dis,self.img_sgm_taichi,\
                                                self.array_u_taichi,self.array_v_taichi,self.array_angle_taichi,view_idx)#pass img_sgm directly into this function using unified memory
                         self.FilterSinogram()
-                        self.SaveFilteredSinogram()
                         
-                        self.BackProjectionPixelDriven(self.dect_elem_count_vertical_actual, self.img_dim, self.dect_elem_count_horizontal, \
-                                        self.view_num, self.dect_elem_width,self.img_pix_size, self.source_isocenter_dis, self.source_dect_dis, self.total_scan_angle,\
+                        
+                        self.BackProjectionPixelDriven(self.det_elem_count_vertical_actual, self.img_dim, self.det_elem_count_horizontal, \
+                                        self.view_num, self.det_elem_width,self.img_pix_size, self.source_isocenter_dis, self.source_det_dis, self.total_scan_angle,\
                                         self.array_angle_taichi, self.img_rot,self.img_sgm_filtered_taichi,self.img_recon_taichi,\
-                                        self.array_u_taichi,self.short_scan,self.cone_beam,self.dect_elem_height,\
+                                        self.array_u_taichi,self.short_scan,self.cone_beam,self.det_elem_height,\
                                             self.array_v_taichi,self.img_dim_z,self.img_voxel_height,\
                                                 self.img_center_x,self.img_center_y,self.img_center_z,self.curved_dect,\
                                                     self.bool_apply_pmatrix,self.array_pmatrix_taichi, self.recon_view_mode, view_idx)
@@ -95,6 +95,7 @@ class Mgfbp_v2(Mgfbp):
                     print('\nSaving to %s !' % self.output_path)
                     self.SetTruncatedRegionToZero(self.img_recon_taichi, self.img_dim, self.img_dim_z)
                     self.SaveReconImg()
+                self.SaveFilteredSinogram()
         return self.img_recon #函数返回重建
     
     def __init__(self,config_dict):
@@ -103,41 +104,42 @@ class Mgfbp_v2(Mgfbp):
 
     def InitializeSinogramBuffer(self): #new definition of InitializeSinogramBuffer function
         #sgm in taichi contains info in only one_view to save gpu memory !!!
-        self.img_sgm_taichi = ti.field(dtype=ti.f32, shape=(self.dect_elem_count_vertical_actual,1, self.dect_elem_count_horizontal)) 
-        self.img_sgm_filtered_taichi = ti.field(dtype=ti.f32, shape=(self.dect_elem_count_vertical_actual,1,self.dect_elem_count_horizontal))
+        self.img_sgm = np.zeros((self.det_elem_count_vertical_actual, self.view_num, self.det_elem_count_horizontal),dtype = np.float32)
+        self.img_sgm_taichi = ti.field(dtype=ti.f32, shape=(self.det_elem_count_vertical_actual,1, self.det_elem_count_horizontal)) 
+        self.img_sgm_filtered_taichi = ti.field(dtype=ti.f32, shape=(self.det_elem_count_vertical_actual,1,self.det_elem_count_horizontal))
         
         if self.apply_gauss_vertical:
-            self.img_sgm_filtered_intermediate_taichi = ti.field(dtype=ti.f32, shape=(self.dect_elem_count_vertical_actual,1, self.dect_elem_count_horizontal))
+            self.img_sgm_filtered_intermediate_taichi = ti.field(dtype=ti.f32, shape=(self.det_elem_count_vertical_actual,1, self.det_elem_count_horizontal))
         else:
             self.img_sgm_filtered_intermediate_taichi = ti.field(dtype=ti.f32, shape=(1,1,1))
             #if vertical gauss filter is not applied, initialize this intermediate sgm with a small size to save GPU memory
    
  
     @ti.kernel
-    def BHCorrection(self, dect_elem_count_vertical_actual:ti.i32, view_num:ti.i32, dect_elem_count_horizontal:ti.i32,img_sgm_taichi:ti.template(),\
+    def BHCorrection(self, det_elem_count_vertical_actual:ti.i32, view_num:ti.i32, det_elem_count_horizontal:ti.i32,img_sgm_taichi:ti.template(),\
                      array_bh_coefficients_taichi:ti.template(),bh_corr_order:ti.i32):
         #对正弦图做加权，包括fan beam的cos加权和短扫面加权
-        for j, s in ti.ndrange(dect_elem_count_horizontal, dect_elem_count_vertical_actual):
+        for j, s in ti.ndrange(det_elem_count_horizontal, det_elem_count_vertical_actual):
             temp_val = 0.0
             for t in ti.ndrange(bh_corr_order):
                 temp_val = temp_val + array_bh_coefficients_taichi[t] * (img_sgm_taichi[s,0,j]**(t+1))#apply ploynomial calculation
             img_sgm_taichi[s,0,j] = temp_val
 
     @ti.kernel
-    def WeightSgm(self, dect_elem_count_vertical_actual:ti.i32, short_scan:ti.i32, curved_dect:ti.i32, scan_angle:ti.f32,\
-                  view_num:ti.i32, dect_elem_count_horizontal:ti.i32, source_dect_dis:ti.f32,img_sgm_taichi:ti.template(),\
+    def WeightSgm(self, det_elem_count_vertical_actual:ti.i32, short_scan:ti.i32, curved_dect:ti.i32, scan_angle:ti.f32,\
+                  view_num:ti.i32, det_elem_count_horizontal:ti.i32, source_det_dis:ti.f32,img_sgm_taichi:ti.template(),\
                       array_u_taichi:ti.template(),array_v_taichi:ti.template(),array_angle_taichi:ti.template(), view_idx:ti.i32):
         #对正弦图做加权，包括fan beam的cos加权和短扫描加权
-        for   j in ti.ndrange(dect_elem_count_horizontal):
+        for   j in ti.ndrange(det_elem_count_horizontal):
             u_actual = array_u_taichi[j]
-            for s in ti.ndrange(dect_elem_count_vertical_actual):
+            for s in ti.ndrange(det_elem_count_vertical_actual):
                 v_actual = array_v_taichi[s]
                 if curved_dect:
-                    img_sgm_taichi[s,0,j] = img_sgm_taichi[s,0,j] * source_dect_dis * ti.math.cos(-u_actual/source_dect_dis) \
-                        * source_dect_dis / ((source_dect_dis**2 + v_actual**2)**0.5)
+                    img_sgm_taichi[s,0,j] = img_sgm_taichi[s,0,j] * source_det_dis * ti.math.cos(- u_actual/source_det_dis) \
+                        * source_det_dis / ((source_det_dis**2 + v_actual**2)**0.5)
                 else:
-                    img_sgm_taichi[s,0,j]=(img_sgm_taichi[s,0,j] * source_dect_dis * source_dect_dis ) \
-                        / (( source_dect_dis **2 + u_actual**2 + v_actual **2) ** 0.5)
+                    img_sgm_taichi[s,0,j]=(img_sgm_taichi[s,0,j] * source_det_dis * source_det_dis ) \
+                        / (( source_det_dis **2 + u_actual**2 + v_actual **2) ** 0.5)
                 if short_scan:
                     #for scans longer than 360 degrees but not muliples of 360, we also need to apply parker weighting
                     #for example, for a 600 degrees scan, we also need to apply parker weighting
@@ -148,9 +150,9 @@ class Mgfbp_v2(Mgfbp):
                     rotation_direction =  abs(scan_angle) / (scan_angle)
                     gamma = 0.0
                     if curved_dect:
-                        gamma = (-u_actual / source_dect_dis) * rotation_direction
+                        gamma = (-u_actual / source_det_dis) * rotation_direction
                     else:
-                        gamma = ti.atan2(-u_actual, source_dect_dis) * rotation_direction
+                        gamma = ti.atan2(-u_actual, source_det_dis) * rotation_direction
                     gamma_max = remain_angle - PI
                     #maximum gamma defined by remain angle
                     #calculation of the parker weighting
@@ -184,44 +186,44 @@ class Mgfbp_v2(Mgfbp):
             self.img_sgm_filtered_taichi = self.img_sgm_taichi
             #non filtration is performed
         else:
-            self.ConvolveSgmAndKernel(self.dect_elem_count_vertical_actual,self.view_num,self.dect_elem_count_horizontal,\
-                                      self.dect_elem_width,self.img_sgm_taichi,self.array_recon_kernel_taichi,\
-                                          self.array_kernel_gauss_vertical_taichi,self.dect_elem_height, self.apply_gauss_vertical,
+            self.ConvolveSgmAndKernel(self.det_elem_count_vertical_actual,self.view_num,self.det_elem_count_horizontal,\
+                                      self.det_elem_width,self.img_sgm_taichi,self.array_recon_kernel_taichi,\
+                                          self.array_kernel_gauss_vertical_taichi,self.det_elem_height, self.apply_gauss_vertical,
                                           self.img_sgm_filtered_intermediate_taichi, self.img_sgm_filtered_taichi)
     @ti.kernel
-    def ConvolveSgmAndKernel(self, dect_elem_count_vertical_actual:ti.i32, view_num:ti.i32, \
-                             dect_elem_count_horizontal:ti.i32, dect_elem_width:ti.f32, img_sgm_taichi:ti.template(), \
+    def ConvolveSgmAndKernel(self, det_elem_count_vertical_actual:ti.i32, view_num:ti.i32, \
+                             det_elem_count_horizontal:ti.i32, det_elem_width:ti.f32, img_sgm_taichi:ti.template(), \
                                  array_recon_kernel_taichi:ti.template(),array_kernel_gauss_vertical_taichi:ti.template(),\
-                                     dect_elem_height:ti.f32, apply_gauss_vertical:ti.i32,img_sgm_filtered_intermediate_taichi:ti.template(),\
+                                     det_elem_height:ti.f32, apply_gauss_vertical:ti.i32,img_sgm_filtered_intermediate_taichi:ti.template(),\
                                          img_sgm_filtered_taichi:ti.template()):
         #apply filter along vertical direction
-        for i, k in ti.ndrange(dect_elem_count_vertical_actual, dect_elem_count_horizontal):
+        for i, k in ti.ndrange(det_elem_count_vertical_actual, det_elem_count_horizontal):
             temp_val = 0.0
             if apply_gauss_vertical:
                 # if vertical filter is applied, apply vertical filtering and 
                 # save the intermediate result to img_sgm_filtered_intermediate_taichi
-                for n in ti.ndrange(dect_elem_count_vertical_actual):
+                for n in ti.ndrange(det_elem_count_vertical_actual):
                     if i - n <= 10 and  i - n >=-10: #set a 10 pixel threshold to accelerate the program  
                         temp_val += img_sgm_taichi[n, 0, k] \
-                            * array_kernel_gauss_vertical_taichi[i + (dect_elem_count_vertical_actual - 1) - n]
-                img_sgm_filtered_intermediate_taichi[i, 0, k] = temp_val * dect_elem_height
+                            * array_kernel_gauss_vertical_taichi[i + (det_elem_count_vertical_actual - 1) - n]
+                img_sgm_filtered_intermediate_taichi[i, 0, k] = temp_val * det_elem_height
             else:
                 pass
                 
-        for i, k in ti.ndrange(dect_elem_count_vertical_actual, dect_elem_count_horizontal):
+        for i, k in ti.ndrange(det_elem_count_vertical_actual, det_elem_count_horizontal):
             temp_val = 0.0 
             if apply_gauss_vertical:
                 # if vertical filter is applied, use img_sgm_filtered_intermediate_taichi
                 # for horizontal filtering
-                for m in ti.ndrange(dect_elem_count_horizontal):
+                for m in ti.ndrange(det_elem_count_horizontal):
                     temp_val += img_sgm_filtered_intermediate_taichi[i, 0, m] \
-                        * array_recon_kernel_taichi[ k + (dect_elem_count_horizontal - 1) - m]
+                        * array_recon_kernel_taichi[ k + (det_elem_count_horizontal - 1) - m]
             else:
                 # if not, use img_sgm_taichi
-                for m in ti.ndrange(dect_elem_count_horizontal):
+                for m in ti.ndrange(det_elem_count_horizontal):
                     temp_val += img_sgm_taichi[i, 0, m] \
-                            * array_recon_kernel_taichi[ k + (dect_elem_count_horizontal - 1) - m]
-            img_sgm_filtered_taichi[i, 0, k] = temp_val * dect_elem_width
+                            * array_recon_kernel_taichi[ k + (det_elem_count_horizontal - 1) - m]
+            img_sgm_filtered_taichi[i, 0, k] = temp_val * det_elem_width
     
     @ti.kernel 
     def SetTruncatedRegionToZero(self,img_recon_taichi:ti.template(),img_dim:ti.i32,img_dim_z:ti.i32):
@@ -230,11 +232,11 @@ class Mgfbp_v2(Mgfbp):
                 img_recon_taichi[i_z,i_x,i_y] = 0.0
         
     @ti.kernel
-    def BackProjectionPixelDriven(self, dect_elem_count_vertical_actual:ti.i32, img_dim:ti.i32, dect_elem_count_horizontal:ti.i32, \
-                                  view_num:ti.i32, dect_elem_width:ti.f32,\
-                                  img_pix_size:ti.f32, source_isocenter_dis:ti.f32, source_dect_dis:ti.f32,total_scan_angle:ti.f32,\
+    def BackProjectionPixelDriven(self, det_elem_count_vertical_actual:ti.i32, img_dim:ti.i32, det_elem_count_horizontal:ti.i32, \
+                                  view_num:ti.i32, det_elem_width:ti.f32,\
+                                  img_pix_size:ti.f32, source_isocenter_dis:ti.f32, source_det_dis:ti.f32,total_scan_angle:ti.f32,\
                                       array_angle_taichi:ti.template(),img_rot:ti.f32,img_sgm_filtered_taichi:ti.template(),img_recon_taichi:ti.template(),\
-                                          array_u_taichi:ti.template(), short_scan:ti.i32,cone_beam:ti.i32,dect_elem_height:ti.f32,\
+                                          array_u_taichi:ti.template(), short_scan:ti.i32,cone_beam:ti.i32,det_elem_height:ti.f32,\
                                               array_v_taichi:ti.template(),img_dim_z:ti.i32,img_voxel_height:ti.f32, \
                                                   img_center_x:ti.f32,img_center_y:ti.f32,img_center_z:ti.f32,curved_dect:ti.i32,\
                                                       bool_apply_pmatrix:ti.i32, array_pmatrix_taichi:ti.template(), recon_view_mode: ti.i32, view_idx:ti.i32):
@@ -282,37 +284,37 @@ class Mgfbp_v2(Mgfbp):
             pix_to_source_parallel_dis = 0.0
             mag_factor = 0.0
             temp_u_idx_floor = 0
-            pix_proj_to_dect_u = 0.0
-            pix_proj_to_dect_v = 0.0
-            pix_proj_to_dect_u_idx = 0.0
-            pix_proj_to_dect_v_idx = 0.0
+            pix_proj_to_det_u = 0.0
+            pix_proj_to_det_v = 0.0
+            pix_proj_to_det_u_idx = 0.0
+            pix_proj_to_det_v_idx = 0.0
             ratio_u = 0.0
             ratio_v = 0.0
             angle_this_view_exclude_img_rot = array_angle_taichi[view_idx] - img_rot
             
             pix_to_source_parallel_dis = source_isocenter_dis - x * ti.cos(angle_this_view_exclude_img_rot) - y * ti.sin(angle_this_view_exclude_img_rot)
             if bool_apply_pmatrix == 0:
-                mag_factor = source_dect_dis / pix_to_source_parallel_dis
+                mag_factor = source_det_dis / pix_to_source_parallel_dis
                 y_after_rotation_angle_this_view = - x*ti.sin(angle_this_view_exclude_img_rot) + y*ti.cos(angle_this_view_exclude_img_rot)
                 if curved_dect:
-                    pix_proj_to_dect_u = source_dect_dis * ti.atan2(y_after_rotation_angle_this_view, pix_to_source_parallel_dis)
+                    pix_proj_to_det_u = source_det_dis * ti.atan2(y_after_rotation_angle_this_view, pix_to_source_parallel_dis)
                 else:
-                    pix_proj_to_dect_u = mag_factor * y_after_rotation_angle_this_view
-                pix_proj_to_dect_u_idx = (pix_proj_to_dect_u - array_u_taichi[0]) / (array_u_taichi[1] - array_u_taichi[0])
+                    pix_proj_to_det_u = mag_factor * y_after_rotation_angle_this_view
+                pix_proj_to_det_u_idx = (pix_proj_to_det_u - array_u_taichi[0]) / (array_u_taichi[1] - array_u_taichi[0])
             else:
                 mag_factor = 1.0 / (array_pmatrix_taichi[12*view_idx + 8] * x +\
                     array_pmatrix_taichi[12*view_idx + 9] * y +\
                         array_pmatrix_taichi[12*view_idx + 10] * z +\
                             array_pmatrix_taichi[12*view_idx + 11] * 1)
-                pix_proj_to_dect_u_idx = (array_pmatrix_taichi[12*view_idx + 0] * x +\
+                pix_proj_to_det_u_idx = (array_pmatrix_taichi[12*view_idx + 0] * x +\
                     array_pmatrix_taichi[12*view_idx + 1] * y +\
                         array_pmatrix_taichi[12*view_idx + 2] * z +\
                             array_pmatrix_taichi[12*view_idx + 3] * 1) * mag_factor
-            if pix_proj_to_dect_u_idx < 0 or  pix_proj_to_dect_u_idx + 1 > dect_elem_count_horizontal - 1:
+            if pix_proj_to_det_u_idx < 0 or  pix_proj_to_det_u_idx + 1 > det_elem_count_horizontal - 1:
                 img_recon_taichi[i_z, i_y, i_x] = -10000 #mark the truncated region with -10000
             else:
-                temp_u_idx_floor = int(ti.floor(pix_proj_to_dect_u_idx))
-                ratio_u = pix_proj_to_dect_u_idx - temp_u_idx_floor
+                temp_u_idx_floor = int(ti.floor(pix_proj_to_det_u_idx))
+                ratio_u = pix_proj_to_det_u_idx - temp_u_idx_floor
                                     
                 
                 distance_weight = 0.0
@@ -325,22 +327,22 @@ class Mgfbp_v2(Mgfbp):
     
                 if cone_beam == True:
                     if bool_apply_pmatrix == 0:
-                        pix_proj_to_dect_v = mag_factor * z
-                        pix_proj_to_dect_v_idx = (pix_proj_to_dect_v - array_v_taichi[0]) / dect_elem_height \
+                        pix_proj_to_det_v = mag_factor * z
+                        pix_proj_to_det_v_idx = (pix_proj_to_det_v - array_v_taichi[0]) / det_elem_height \
                             * abs(array_v_taichi[1] - array_v_taichi[0]) / (array_v_taichi[1] - array_v_taichi[0])
                             #abs(array_v_taichi[1] - array_v_taichi[0]) / (array_v_taichi[1] - array_v_taichi[0]) defines whether the first 
                             #sinogram slice corresponds to the top row
                     else:
-                        pix_proj_to_dect_v_idx = (array_pmatrix_taichi[12*view_idx + 4] * x +\
+                        pix_proj_to_det_v_idx = (array_pmatrix_taichi[12*view_idx + 4] * x +\
                             array_pmatrix_taichi[12*view_idx + 5] * y +\
                                 array_pmatrix_taichi[12*view_idx + 6] * z +\
                                     array_pmatrix_taichi[12*view_idx + 7] * 1) * mag_factor
                             
-                    temp_v_idx_floor = int(ti.floor(pix_proj_to_dect_v_idx))   #mark
-                    if temp_v_idx_floor < 0 or temp_v_idx_floor + 1 > dect_elem_count_vertical_actual - 1:
+                    temp_v_idx_floor = int(ti.floor(pix_proj_to_det_v_idx))   #mark
+                    if temp_v_idx_floor < 0 or temp_v_idx_floor + 1 > det_elem_count_vertical_actual - 1:
                         img_recon_taichi[i_z, i_y, i_x] = -10000 #mark the truncated region with -10000
                     else:
-                        ratio_v = pix_proj_to_dect_v_idx - temp_v_idx_floor
+                        ratio_v = pix_proj_to_det_v_idx - temp_v_idx_floor
                         part_0 = img_sgm_filtered_taichi[temp_v_idx_floor,0,temp_u_idx_floor] * (1 - ratio_u) + \
                             img_sgm_filtered_taichi[temp_v_idx_floor,0,temp_u_idx_floor + 1] * ratio_u
                         part_1 = img_sgm_filtered_taichi[temp_v_idx_floor + 1,0,temp_u_idx_floor] * (1 - ratio_u) +\

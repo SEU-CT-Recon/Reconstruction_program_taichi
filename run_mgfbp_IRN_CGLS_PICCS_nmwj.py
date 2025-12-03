@@ -56,13 +56,13 @@ class Mgfbp_ir_piccs_nmwj(Mgfbp_ir_piccs):
         if not self.bool_uneven_scan_angle:
             self.GenerateAngleArray(
                 self.view_num, self.img_rot, self.total_scan_angle, self.array_angle_taichi)
-        self.GenerateDectPixPosArrayFPJ(self.dect_elem_count_vertical, - self.dect_elem_height, self.dect_offset_vertical, self.array_v_taichi)
-        self.GenerateDectPixPosArrayFPJ(self.dect_elem_count_horizontal*self.oversample_size,-self.dect_elem_width/self.oversample_size,
-                                     -self.dect_offset_horizontal, self.array_u_taichi)
+        self.GenerateDectPixPosArrayFPJ(self.det_elem_count_vertical, - self.det_elem_height, self.det_offset_vertical, self.array_v_taichi)
+        self.GenerateDectPixPosArrayFPJ(self.det_elem_count_horizontal*self.oversample_size,-self.det_elem_width/self.oversample_size,
+                                     -self.det_offset_horizontal, self.array_u_taichi)
         self.file_processed_count = 1;#record the number of files processed
         
         num_source = 24
-        img_sgm_total = np.zeros(shape = (self.dect_elem_count_vertical,self.view_num * num_source,self.dect_elem_count_horizontal))
+        img_sgm_total = np.zeros(shape = (self.det_elem_count_vertical,self.view_num * num_source,self.det_elem_count_horizontal))
         
         
         for source_idx in range(num_source):
@@ -148,22 +148,22 @@ class Mgfbp_ir_piccs_nmwj(Mgfbp_ir_piccs):
             # print('\r' + str_1, end='') 
             if self.img_fp_effective_map_flag_each_view[view_idx] > 0:
                 self.img_fp_effective_map_taichi_single_view.from_numpy(self.img_fp_effective_map[:,view_idx,:])
-                self.img_fp_x_taichi_single_view.from_numpy(np.zeros((self.dect_elem_count_vertical_actual, self.dect_elem_count_horizontal)))
+                self.img_fp_x_taichi_single_view.from_numpy(np.zeros((self.det_elem_count_vertical_actual, self.det_elem_count_horizontal)))
                 self.ForwardProjectionBilinear(self.img_x_taichi, self.img_fp_x_taichi_single_view, self.array_u_taichi,
                                                 self.array_v_taichi, self.array_angle_taichi, self.img_dim, self.img_dim_z,
-                                                self.dect_elem_count_horizontal,
-                                                self.dect_elem_count_vertical, self.view_num, self.img_pix_size, self.img_voxel_height,
-                                                self.source_isocenter_dis, self.source_dect_dis, self.cone_beam,
+                                                self.det_elem_count_horizontal,
+                                                self.det_elem_count_vertical, self.view_num, self.img_pix_size, self.img_voxel_height,
+                                                self.source_isocenter_dis, self.source_det_dis, self.cone_beam,
                                                 self.helical_scan, self.helical_pitch, view_idx, self.fpj_step_size,
                                                 self.img_center_x, self.img_center_y, self.array_img_center_z_taichi, self.curved_dect,
                                                 self.matrix_A_each_view_taichi, self.x_s_each_view_taichi, self.bool_apply_pmatrix,\
-                                                self.dect_elem_count_vertical_actual, self.dect_elem_vertical_recon_range_begin,\
+                                                self.det_elem_count_vertical_actual, self.det_elem_vertical_recon_range_begin,\
                                                     self.array_source_pos_z_taichi,self.img_fp_effective_map_taichi_single_view)
                     
-                self.BackProjectionPixelDrivenPerView(self.dect_elem_count_vertical_actual, self.img_dim, self.dect_elem_count_horizontal, \
-                                self.view_num, self.dect_elem_width,self.img_pix_size, self.source_isocenter_dis, self.source_dect_dis,self.total_scan_angle,\
+                self.BackProjectionPixelDrivenPerView(self.det_elem_count_vertical_actual, self.img_dim, self.det_elem_count_horizontal, \
+                                self.view_num, self.det_elem_width,self.img_pix_size, self.source_isocenter_dis, self.source_det_dis,self.total_scan_angle,\
                                 self.array_angle_taichi, self.img_rot,self.img_fp_x_taichi_single_view,self.img_bp_fp_x_taichi,\
-                                self.array_u_taichi,self.short_scan,self.cone_beam,self.dect_elem_height,\
+                                self.array_u_taichi,self.short_scan,self.cone_beam,self.det_elem_height,\
                                     self.array_v_taichi,self.img_dim_z,self.img_voxel_height,\
                                         self.img_center_x,self.img_center_y,self.array_img_center_z_taichi,self.curved_dect,\
                                             self.bool_apply_pmatrix,self.array_pmatrix_taichi, self.recon_view_mode,view_idx, self.img_x_truncation_flag_taichi,\
@@ -228,10 +228,10 @@ class Mgfbp_ir_piccs_nmwj(Mgfbp_ir_piccs):
             print('\r' + str_2, end='')   
             if self.img_fp_effective_map_flag_each_view[view_idx] > 0:
                 self.img_sgm_taichi.from_numpy(img_sgm[:,view_idx,:] * self.img_fp_effective_map[:,view_idx,:])
-                self.BackProjectionPixelDrivenPerView(self.dect_elem_count_vertical_actual, self.img_dim, self.dect_elem_count_horizontal, \
-                                self.view_num, self.dect_elem_width,self.img_pix_size, self.source_isocenter_dis, self.source_dect_dis,self.total_scan_angle,\
+                self.BackProjectionPixelDrivenPerView(self.det_elem_count_vertical_actual, self.img_dim, self.det_elem_count_horizontal, \
+                                self.view_num, self.det_elem_width,self.img_pix_size, self.source_isocenter_dis, self.source_det_dis,self.total_scan_angle,\
                                 self.array_angle_taichi, self.img_rot,self.img_sgm_taichi,self.img_bp_b_taichi,\
-                                self.array_u_taichi,self.short_scan,self.cone_beam,self.dect_elem_height,\
+                                self.array_u_taichi,self.short_scan,self.cone_beam,self.det_elem_height,\
                                     self.array_v_taichi,self.img_dim_z,self.img_voxel_height,\
                                         self.img_center_x,self.img_center_y,self.array_img_center_z_taichi,self.curved_dect,\
                                             self.bool_apply_pmatrix,self.array_pmatrix_taichi, self.recon_view_mode, view_idx, self.img_x_truncation_flag_taichi,\
@@ -242,30 +242,30 @@ class Mgfbp_ir_piccs_nmwj(Mgfbp_ir_piccs):
     
     def ForwardProjection(self,img_x):
         self.img_x_taichi.from_numpy(img_x)
-        img_fp_x = np.zeros((self.dect_elem_count_vertical_actual, self.view_num, self.dect_elem_count_horizontal), dtype=np.float32)
+        img_fp_x = np.zeros((self.det_elem_count_vertical_actual, self.view_num, self.det_elem_count_horizontal), dtype=np.float32)
         for view_idx in range(self.view_num):
             if self.img_fp_effective_map_flag_each_view[view_idx] > 0:
                 self.img_fp_effective_map_taichi_single_view.from_numpy(self.img_fp_effective_map[:,view_idx,:])
-                self.img_fp_x_taichi_single_view.from_numpy(np.zeros((self.dect_elem_count_vertical_actual, self.dect_elem_count_horizontal)))
+                self.img_fp_x_taichi_single_view.from_numpy(np.zeros((self.det_elem_count_vertical_actual, self.det_elem_count_horizontal)))
                 self.ForwardProjectionBilinear(self.img_x_taichi, self.img_fp_x_taichi_single_view, self.array_u_taichi,
                                                 self.array_v_taichi, self.array_angle_taichi, self.img_dim, self.img_dim_z,
-                                                self.dect_elem_count_horizontal,
-                                                self.dect_elem_count_vertical, self.view_num, self.img_pix_size, self.img_voxel_height,
-                                                self.source_isocenter_dis, self.source_dect_dis, self.cone_beam,
+                                                self.det_elem_count_horizontal,
+                                                self.det_elem_count_vertical, self.view_num, self.img_pix_size, self.img_voxel_height,
+                                                self.source_isocenter_dis, self.source_det_dis, self.cone_beam,
                                                 self.helical_scan, self.helical_pitch, view_idx, self.fpj_step_size,
                                                 self.img_center_x, self.img_center_y, self.array_img_center_z_taichi, self.curved_dect,
                                                 self.matrix_A_each_view_taichi, self.x_s_each_view_taichi, self.bool_apply_pmatrix,\
-                                                self.dect_elem_count_vertical_actual, self.dect_elem_vertical_recon_range_begin,\
+                                                self.det_elem_count_vertical_actual, self.det_elem_vertical_recon_range_begin,\
                                                 self.array_source_pos_z_taichi,self.img_fp_effective_map_taichi_single_view)
                 img_fp_x[:,view_idx,:] = self.img_fp_x_taichi_single_view.to_numpy()   
         return img_fp_x
     
     @ti.kernel
-    def BackProjectionPixelDrivenPerView(self, dect_elem_count_vertical_actual:ti.i32, img_dim:ti.i32, dect_elem_count_horizontal:ti.i32, \
-                                  view_num:ti.i32, dect_elem_width:ti.f32,\
-                                  img_pix_size:ti.f32, source_isocenter_dis:ti.f32, source_dect_dis:ti.f32,total_scan_angle:ti.f32,\
+    def BackProjectionPixelDrivenPerView(self, det_elem_count_vertical_actual:ti.i32, img_dim:ti.i32, det_elem_count_horizontal:ti.i32, \
+                                  view_num:ti.i32, det_elem_width:ti.f32,\
+                                  img_pix_size:ti.f32, source_isocenter_dis:ti.f32, source_det_dis:ti.f32,total_scan_angle:ti.f32,\
                                       array_angle_taichi:ti.template(),img_rot:ti.f32,img_sgm_filtered_taichi:ti.template(),img_recon_taichi:ti.template(),\
-                                          array_u_taichi:ti.template(), short_scan:ti.i32,cone_beam:ti.i32,dect_elem_height:ti.f32,\
+                                          array_u_taichi:ti.template(), short_scan:ti.i32,cone_beam:ti.i32,det_elem_height:ti.f32,\
                                               array_v_taichi:ti.template(),img_dim_z:ti.i32,img_voxel_height:ti.f32, \
                                                   img_center_x:ti.f32,img_center_y:ti.f32,array_img_center_z_taichi:ti.template(),curved_dect:ti.i32,\
                                                       bool_apply_pmatrix:ti.i32, array_pmatrix_taichi:ti.template(), recon_view_mode: ti.i32, view_idx:ti.i32,\
@@ -295,10 +295,10 @@ class Mgfbp_ir_piccs_nmwj(Mgfbp_ir_piccs):
                 pix_to_source_parallel_dis = 0.0
                 mag_factor = 0.0
                 temp_u_idx_floor = 0
-                pix_proj_to_dect_u = 0.0
-                pix_proj_to_dect_v = 0.0
-                pix_proj_to_dect_u_idx = 0.0
-                pix_proj_to_dect_v_idx = 0.0
+                pix_proj_to_det_u = 0.0
+                pix_proj_to_det_v = 0.0
+                pix_proj_to_det_u_idx = 0.0
+                pix_proj_to_det_v_idx = 0.0
                 ratio_u = 0.0
                 ratio_v = 0.0
                 angle_this_view_exclude_img_rot = array_angle_taichi[view_idx] - img_rot
@@ -314,37 +314,37 @@ class Mgfbp_ir_piccs_nmwj(Mgfbp_ir_piccs):
                 
                 
                 gamma_fan = ti.atan2(-x*ti.sin(angle_this_view_exclude_img_rot)+y*ti.cos(angle_this_view_exclude_img_rot),pix_to_source_parallel_dis)
-                alpha_fan = ti.asin(source_isocenter_dis * ti.sin(gamma_fan) /(source_dect_dis - source_isocenter_dis))
-                pix_proj_to_dect_u = (source_dect_dis - source_isocenter_dis) * (gamma_fan + alpha_fan)
-                pix_proj_to_dect_u_idx = (pix_proj_to_dect_u - array_u_taichi[0]) / (array_u_taichi[1] - array_u_taichi[0])
+                alpha_fan = ti.asin(source_isocenter_dis * ti.sin(gamma_fan) /(source_det_dis - source_isocenter_dis))
+                pix_proj_to_det_u = (source_det_dis - source_isocenter_dis) * (gamma_fan + alpha_fan)
+                pix_proj_to_det_u_idx = (pix_proj_to_det_u - array_u_taichi[0]) / (array_u_taichi[1] - array_u_taichi[0])
                 
                 
                 
                 pix_source_dis_xy = pix_to_source_parallel_dis / ti.cos(gamma_fan)
-                pix_element_dis_xy = (source_isocenter_dis) * ti.cos(gamma_fan) +  (source_dect_dis - source_isocenter_dis) * ti.cos(alpha_fan)
+                pix_element_dis_xy = (source_isocenter_dis) * ti.cos(gamma_fan) +  (source_det_dis - source_isocenter_dis) * ti.cos(alpha_fan)
                 mag_factor = pix_element_dis_xy / pix_source_dis_xy
                 
                 
                 
                     
-                if pix_proj_to_dect_u_idx < 0 or  pix_proj_to_dect_u_idx + 1 > dect_elem_count_horizontal - 1:
+                if pix_proj_to_det_u_idx < 0 or  pix_proj_to_det_u_idx + 1 > det_elem_count_horizontal - 1:
                     img_x_truncation_flag_taichi[i_z, i_y, i_x] = 0.0 #mark the truncated region
                 else:
-                    temp_u_idx_floor = int(ti.floor(pix_proj_to_dect_u_idx))
-                    ratio_u = pix_proj_to_dect_u_idx - temp_u_idx_floor
+                    temp_u_idx_floor = int(ti.floor(pix_proj_to_det_u_idx))
+                    ratio_u = pix_proj_to_det_u_idx - temp_u_idx_floor
                     
-                    pix_proj_to_dect_v = mag_factor * z
-                    pix_proj_to_dect_v_idx = (pix_proj_to_dect_v - array_v_taichi[0])/(array_v_taichi[1] - array_v_taichi[0])
+                    pix_proj_to_det_v = mag_factor * z
+                    pix_proj_to_det_v_idx = (pix_proj_to_det_v - array_v_taichi[0])/(array_v_taichi[1] - array_v_taichi[0])
 
                                 
-                    temp_v_idx_floor = int(ti.floor(pix_proj_to_dect_v_idx))   #mark
+                    temp_v_idx_floor = int(ti.floor(pix_proj_to_det_v_idx))   #mark
                     
                     
-                    if temp_v_idx_floor < 0 or temp_v_idx_floor + 1 > dect_elem_count_vertical_actual - 1:
+                    if temp_v_idx_floor < 0 or temp_v_idx_floor + 1 > det_elem_count_vertical_actual - 1:
                         #img_x_truncation_flag_taichi[i_z, i_y, i_x] = 0.0 #mark the truncated region with -10000
                         img_recon_taichi[i_z, i_y, i_x] +=0.0
                     else:
-                        ratio_v = pix_proj_to_dect_v_idx - temp_v_idx_floor
+                        ratio_v = pix_proj_to_det_v_idx - temp_v_idx_floor
                         part_0 = img_sgm_filtered_taichi[temp_v_idx_floor,temp_u_idx_floor] * (1 - ratio_u) + \
                             img_sgm_filtered_taichi[temp_v_idx_floor,temp_u_idx_floor + 1] * ratio_u
                         part_1 = img_sgm_filtered_taichi[temp_v_idx_floor + 1,temp_u_idx_floor] * (1 - ratio_u) +\
@@ -353,20 +353,20 @@ class Mgfbp_ir_piccs_nmwj(Mgfbp_ir_piccs):
     
     def GenEffectiveMapForwardProjection(self,img_x):
         self.img_x_taichi.from_numpy(img_x)
-        img_fp_x = np.zeros((self.dect_elem_count_vertical_actual, self.view_num, self.dect_elem_count_horizontal), dtype=np.float32)
+        img_fp_x = np.zeros((self.det_elem_count_vertical_actual, self.view_num, self.det_elem_count_horizontal), dtype=np.float32)
         for view_idx in range(self.view_num):
             str_1 = 'Gen effective map view: %4d/%4d' % (view_idx+1, self.view_num)
             self.img_fp_x_taichi_single_view.from_numpy(np.zeros_like(img_fp_x[:,0,:]))
             print('\r' + str_1, end='') 
             self.GenEffectiveMapForwardProjectionAgent(self.img_x_taichi, self.img_fp_x_taichi_single_view, self.array_u_taichi,
                                             self.array_v_taichi, self.array_angle_taichi, self.img_dim, self.img_dim_z,
-                                            self.dect_elem_count_horizontal,
-                                            self.dect_elem_count_vertical, self.view_num, self.img_pix_size, self.img_voxel_height,
-                                            self.source_isocenter_dis, self.source_dect_dis, self.cone_beam,
+                                            self.det_elem_count_horizontal,
+                                            self.det_elem_count_vertical, self.view_num, self.img_pix_size, self.img_voxel_height,
+                                            self.source_isocenter_dis, self.source_det_dis, self.cone_beam,
                                             self.helical_scan, self.helical_pitch, view_idx, self.fpj_step_size,
                                             self.img_center_x, self.img_center_y, self.array_img_center_z_taichi, self.curved_dect,
                                             self.matrix_A_each_view_taichi, self.x_s_each_view_taichi, self.bool_apply_pmatrix,\
-                                            self.dect_elem_count_vertical_actual, self.dect_elem_vertical_recon_range_begin, self.array_source_pos_z_taichi)
+                                            self.det_elem_count_vertical_actual, self.det_elem_vertical_recon_range_begin, self.array_source_pos_z_taichi)
             img_fp_x[:,view_idx,:] = self.img_fp_x_taichi_single_view.to_numpy()   
         return img_fp_x
     
@@ -374,14 +374,14 @@ class Mgfbp_ir_piccs_nmwj(Mgfbp_ir_piccs):
     def GenEffectiveMapForwardProjectionAgent(self, img_image_taichi: ti.template(), img_sgm_large_taichi: ti.template(),
                                   array_u_taichi: ti.template(), array_v_taichi: ti.template(),
                                   array_angle_taichi: ti.template(), img_dim: ti.i32, img_dim_z: ti.i32,
-                                  dect_elem_count_horizontal_oversamplesize: ti.i32,
-                                  dect_elem_count_vertical: ti.i32, view_num: ti.i32,
+                                  det_elem_count_horizontal_oversamplesize: ti.i32,
+                                  det_elem_count_vertical: ti.i32, view_num: ti.i32,
                                   img_pix_size: ti.f32, img_voxel_height: ti.f32, source_isocenter_dis: ti.f32,
-                                  source_dect_dis: ti.f32, cone_beam: ti.i32, helical_scan: ti.i32, helical_pitch: ti.f32,
+                                  source_det_dis: ti.f32, cone_beam: ti.i32, helical_scan: ti.i32, helical_pitch: ti.f32,
                                   angle_idx: ti.i32, fpj_step_size: ti.f32, img_center_x: ti.f32,
                                   img_center_y: ti.f32, array_img_center_z_taichi: ti.template(), curved_dect: ti.i32, matrix_A_each_view_taichi: ti.template(),\
                                   x_s_each_view_taichi: ti.template(), bool_apply_pmatrix: ti.i32, \
-                                  dect_elem_count_vertical_actual: ti.i32, dect_elem_vertical_recon_range_begin:ti.i32,array_source_pos_z_taichi:ti.template()):
+                                  det_elem_count_vertical_actual: ti.i32, det_elem_vertical_recon_range_begin:ti.i32,array_source_pos_z_taichi:ti.template()):
 
         # This new version of code assumes that the gantry stays stationary
         # while the image object rotates
@@ -389,7 +389,7 @@ class Mgfbp_ir_piccs_nmwj(Mgfbp_ir_piccs):
 
         # define aliases
         sid = source_isocenter_dis  # alias
-        sdd = source_dect_dis  # alias
+        sdd = source_det_dis  # alias
 
         # calculate the position of the source
         source_pos_x = sid
@@ -413,8 +413,8 @@ class Mgfbp_ir_piccs_nmwj(Mgfbp_ir_piccs):
         z_0 = -(img_dim_z - 1.0) / 2.0 * img_voxel_height + array_img_center_z_taichi[angle_idx]
 
         # initialize coordinate for the detector element
-        dect_elem_pos_x = dect_elem_pos_y = dect_elem_pos_z = 0.0
-        source_dect_elem_dis = 0.0  # initialize detector element to source distance
+        det_elem_pos_x = det_elem_pos_y = det_elem_pos_z = 0.0
+        source_det_elem_dis = 0.0  # initialize detector element to source distance
         # initialize detector element to source unit vector
         unit_vec_lambda_x = unit_vec_lambda_y = unit_vec_lambda_z = 0.0
         # lower range for the line integral
@@ -433,33 +433,33 @@ class Mgfbp_ir_piccs_nmwj(Mgfbp_ir_piccs):
             total_scan_angle = abs((array_angle_taichi[view_num - 1] - array_angle_taichi[0])) / (view_num - 1) * view_num
             num_laps = total_scan_angle / (PI * 2)
             z_dis_per_view = helical_pitch * (num_laps / view_num) * (abs(
-                array_v_taichi[1] - array_v_taichi[0]) * dect_elem_count_vertical) / (sdd / sid)
-            #here pitch is calculated from dect_elem_count_vertical, rather than dect_elem_count_vertical_actual
+                array_v_taichi[1] - array_v_taichi[0]) * det_elem_count_vertical) / (sdd / sid)
+            #here pitch is calculated from det_elem_count_vertical, rather than det_elem_count_vertical_actual
 
         # number of steps
         count_steps = int(
             ti.floor((l_max - l_min)/(fpj_step_size * voxel_diagonal_size)))
 
-        for u_idx, v_idx in ti.ndrange(dect_elem_count_horizontal_oversamplesize, dect_elem_count_vertical_actual):
-            #v range from 0 to dect_elem_count_vertical_actual - 1
+        for u_idx, v_idx in ti.ndrange(det_elem_count_horizontal_oversamplesize, det_elem_count_vertical_actual):
+            #v range from 0 to det_elem_count_vertical_actual - 1
             #caluclate the position of the detector element
-            img_sgm_large_taichi[v_idx + dect_elem_vertical_recon_range_begin,u_idx] = 0.0
+            img_sgm_large_taichi[v_idx + det_elem_vertical_recon_range_begin,u_idx] = 0.0
             gamma_prime = ( - array_u_taichi[u_idx]) / (sdd - sid) #conterclockwise is positive, corresponding to -y direction
-            dect_elem_pos_x = - (sdd - sid) * ti.cos(gamma_prime)
+            det_elem_pos_x = - (sdd - sid) * ti.cos(gamma_prime)
             # positive u direction is - y
-            dect_elem_pos_y = - (sdd - sid) * ti.sin(gamma_prime)#negative gamma_prime corresponds to positive y
+            det_elem_pos_y = - (sdd - sid) * ti.sin(gamma_prime)#negative gamma_prime corresponds to positive y
                 
             #add this distance to z position to simulate helical scan
-            dect_elem_pos_z = array_v_taichi[v_idx] + z_dis_per_view * angle_idx + array_source_pos_z_taichi[angle_idx]
+            det_elem_pos_z = array_v_taichi[v_idx] + z_dis_per_view * angle_idx + array_source_pos_z_taichi[angle_idx]
             # assume that the source and the detector moves upward for a helical scan (pitch>0)
             source_pos_z = z_dis_per_view * angle_idx + array_source_pos_z_taichi[angle_idx]
             #distance between the source and the detector element
-            source_dect_elem_dis = ((dect_elem_pos_x - source_pos_x)**2 + (
-                dect_elem_pos_y - source_pos_y)**2 + (dect_elem_pos_z - source_pos_z)**2) ** 0.5
+            source_det_elem_dis = ((det_elem_pos_x - source_pos_x)**2 + (
+                det_elem_pos_y - source_pos_y)**2 + (det_elem_pos_z - source_pos_z)**2) ** 0.5
             #calculate the unit vector of \vec(x_d - x_s)
-            unit_vec_lambda_x = (dect_elem_pos_x - source_pos_x) / source_dect_elem_dis
-            unit_vec_lambda_y = (dect_elem_pos_y - source_pos_y) / source_dect_elem_dis
-            unit_vec_lambda_z = (dect_elem_pos_z - source_pos_z) / source_dect_elem_dis
+            unit_vec_lambda_x = (det_elem_pos_x - source_pos_x) / source_det_elem_dis
+            unit_vec_lambda_y = (det_elem_pos_y - source_pos_y) / source_det_elem_dis
+            unit_vec_lambda_z = (det_elem_pos_z - source_pos_z) / source_det_elem_dis
 
             temp_sgm_val = 0.0
             one_over_mag = 0.0 
@@ -469,7 +469,7 @@ class Mgfbp_ir_piccs_nmwj(Mgfbp_ir_piccs):
                 
                 #for pmatrix case
                 #[x,y,z]^T = A * s * [u,v,1]^T + x_s^T
-                # one_over_mag = (step_idx * fpj_step_size * voxel_diagonal_size + l_min) / source_dect_elem_dis
+                # one_over_mag = (step_idx * fpj_step_size * voxel_diagonal_size + l_min) / source_det_elem_dis
                 # x_p = one_over_mag * (matrix_A_each_view_taichi[angle_idx*9,0] * u_idx \
                 #                         + matrix_A_each_view_taichi[angle_idx*9+1,0] * v_idx\
                 #                             + matrix_A_each_view_taichi[angle_idx*9+2,0] * 1) \
@@ -516,24 +516,24 @@ class Mgfbp_ir_piccs_nmwj(Mgfbp_ir_piccs):
                 z_idx = int(ti.floor((z_rot - z_0) / img_voxel_height))
                 if ((x_idx - img_dim/2.0)**2 + (y_idx - img_dim/2.0)**2) < (img_dim/2.0)**2:
                     #ensure x_idx and y_idx is in the field of view
-                    img_sgm_large_taichi[v_idx + dect_elem_vertical_recon_range_begin,u_idx] = 1.0
+                    img_sgm_large_taichi[v_idx + det_elem_vertical_recon_range_begin,u_idx] = 1.0
                     if z_idx < 0 or z_idx + 1 >= img_dim_z:
                         #if the corresponding z_idx is out of the field of view along z direction
-                        img_sgm_large_taichi[v_idx + dect_elem_vertical_recon_range_begin, u_idx] = 0.0
+                        img_sgm_large_taichi[v_idx + det_elem_vertical_recon_range_begin, u_idx] = 0.0
                         break
     
     @ti.kernel
     def ForwardProjectionBilinear(self, img_image_taichi: ti.template(), img_sgm_large_taichi: ti.template(),
                                   array_u_taichi: ti.template(), array_v_taichi: ti.template(),
                                   array_angle_taichi: ti.template(), img_dim: ti.i32, img_dim_z: ti.i32,
-                                  dect_elem_count_horizontal_oversamplesize: ti.i32,
-                                  dect_elem_count_vertical: ti.i32, view_num: ti.i32,
+                                  det_elem_count_horizontal_oversamplesize: ti.i32,
+                                  det_elem_count_vertical: ti.i32, view_num: ti.i32,
                                   img_pix_size: ti.f32, img_voxel_height: ti.f32, source_isocenter_dis: ti.f32,
-                                  source_dect_dis: ti.f32, cone_beam: ti.i32, helical_scan: ti.i32, helical_pitch: ti.f32,
+                                  source_det_dis: ti.f32, cone_beam: ti.i32, helical_scan: ti.i32, helical_pitch: ti.f32,
                                   angle_idx: ti.i32, fpj_step_size: ti.f32, img_center_x: ti.f32,
                                   img_center_y: ti.f32, array_img_center_z_taichi: ti.template(), curved_dect: ti.i32, matrix_A_each_view_taichi: ti.template(),\
                                   x_s_each_view_taichi: ti.template(), bool_apply_pmatrix: ti.i32, \
-                                  dect_elem_count_vertical_actual: ti.i32, dect_elem_vertical_recon_range_begin:ti.i32, \
+                                  det_elem_count_vertical_actual: ti.i32, det_elem_vertical_recon_range_begin:ti.i32, \
                                       array_source_pos_z_taichi:ti.template(), img_fp_effective_map:ti.template()):
 
         # This new version of code assumes that the gantry stays stationary
@@ -542,7 +542,7 @@ class Mgfbp_ir_piccs_nmwj(Mgfbp_ir_piccs):
 
         # define aliases
         sid = source_isocenter_dis  # alias
-        sdd = source_dect_dis  # alias
+        sdd = source_det_dis  # alias
 
         # calculate the position of the source
         source_pos_x = sid
@@ -566,8 +566,8 @@ class Mgfbp_ir_piccs_nmwj(Mgfbp_ir_piccs):
         z_0 = -(img_dim_z - 1.0) / 2.0 * img_voxel_height  + array_img_center_z_taichi[angle_idx]
 
         # initialize coordinate for the detector element
-        dect_elem_pos_x = dect_elem_pos_y = dect_elem_pos_z = 0.0
-        source_dect_elem_dis = 0.0  # initialize detector element to source distance
+        det_elem_pos_x = det_elem_pos_y = det_elem_pos_z = 0.0
+        source_det_elem_dis = 0.0  # initialize detector element to source distance
         # initialize detector element to source unit vector
         unit_vec_lambda_x = unit_vec_lambda_y = unit_vec_lambda_z = 0.0
         # lower range for the line integral
@@ -586,33 +586,33 @@ class Mgfbp_ir_piccs_nmwj(Mgfbp_ir_piccs):
             total_scan_angle = abs((array_angle_taichi[view_num - 1] - array_angle_taichi[0])) / (view_num - 1) * view_num
             num_laps = total_scan_angle / (PI * 2)
             z_dis_per_view = helical_pitch * (num_laps / view_num) * (abs(
-                array_v_taichi[1] - array_v_taichi[0]) * dect_elem_count_vertical) / (sdd / sid)
-            #here pitch is calculated from dect_elem_count_vertical, rather than dect_elem_count_vertical_actual
+                array_v_taichi[1] - array_v_taichi[0]) * det_elem_count_vertical) / (sdd / sid)
+            #here pitch is calculated from det_elem_count_vertical, rather than det_elem_count_vertical_actual
 
         # number of steps
         count_steps = int(
             ti.floor((l_max - l_min)/(fpj_step_size * voxel_diagonal_size)))
 
-        for u_idx, v_idx in ti.ndrange(dect_elem_count_horizontal_oversamplesize, dect_elem_count_vertical_actual):
-            #v range from 0 to dect_elem_count_vertical_actual - 1
+        for u_idx, v_idx in ti.ndrange(det_elem_count_horizontal_oversamplesize, det_elem_count_vertical_actual):
+            #v range from 0 to det_elem_count_vertical_actual - 1
             #caluclate the position of the detector element
             if img_fp_effective_map[v_idx,u_idx] == 1.0:
                 gamma_prime = ( - array_u_taichi[u_idx]) / (sdd - sid) #conterclockwise is positive, corresponding to -y direction
-                dect_elem_pos_x = - (sdd - sid) * ti.cos(gamma_prime)
+                det_elem_pos_x = - (sdd - sid) * ti.cos(gamma_prime)
                 # positive u direction is - y
-                dect_elem_pos_y = - (sdd - sid) * ti.sin(gamma_prime)#negative gamma_prime corresponds to positive y
+                det_elem_pos_y = - (sdd - sid) * ti.sin(gamma_prime)#negative gamma_prime corresponds to positive y
                     
                 #add this distance to z position to simulate helical scan
-                dect_elem_pos_z = array_v_taichi[v_idx] + z_dis_per_view * angle_idx + array_source_pos_z_taichi[angle_idx]
+                det_elem_pos_z = array_v_taichi[v_idx] + z_dis_per_view * angle_idx + array_source_pos_z_taichi[angle_idx]
                 # assume that the source and the detector moves upward for a helical scan (pitch>0)
                 source_pos_z = z_dis_per_view * angle_idx + array_source_pos_z_taichi[angle_idx]
                 #distance between the source and the detector element
-                source_dect_elem_dis = ((dect_elem_pos_x - source_pos_x)**2 + (
-                    dect_elem_pos_y - source_pos_y)**2 + (dect_elem_pos_z - source_pos_z)**2) ** 0.5
+                source_det_elem_dis = ((det_elem_pos_x - source_pos_x)**2 + (
+                    det_elem_pos_y - source_pos_y)**2 + (det_elem_pos_z - source_pos_z)**2) ** 0.5
                 #calculate the unit vector of \vec(x_d - x_s)
-                unit_vec_lambda_x = (dect_elem_pos_x - source_pos_x) / source_dect_elem_dis
-                unit_vec_lambda_y = (dect_elem_pos_y - source_pos_y) / source_dect_elem_dis
-                unit_vec_lambda_z = (dect_elem_pos_z - source_pos_z) / source_dect_elem_dis
+                unit_vec_lambda_x = (det_elem_pos_x - source_pos_x) / source_det_elem_dis
+                unit_vec_lambda_y = (det_elem_pos_y - source_pos_y) / source_det_elem_dis
+                unit_vec_lambda_z = (det_elem_pos_z - source_pos_z) / source_det_elem_dis
     
                 temp_sgm_val = 0.0
                 one_over_mag = 0.0 
@@ -622,7 +622,7 @@ class Mgfbp_ir_piccs_nmwj(Mgfbp_ir_piccs):
                     
                     #for pmatrix case
                     #[x,y,z]^T = A * s * [u,v,1]^T + x_s^T
-                    # one_over_mag = (step_idx * fpj_step_size * voxel_diagonal_size + l_min) / source_dect_elem_dis
+                    # one_over_mag = (step_idx * fpj_step_size * voxel_diagonal_size + l_min) / source_det_elem_dis
                     # x_p = one_over_mag * (matrix_A_each_view_taichi[angle_idx*9,0] * u_idx \
                     #                         + matrix_A_each_view_taichi[angle_idx*9+1,0] * v_idx\
                     #                             + matrix_A_each_view_taichi[angle_idx*9+2,0] * 1) \
@@ -694,7 +694,7 @@ class Mgfbp_ir_piccs_nmwj(Mgfbp_ir_piccs):
                             temp_sgm_val += 0.0
                         
     
-                img_sgm_large_taichi[v_idx + dect_elem_vertical_recon_range_begin, u_idx] = temp_sgm_val
+                img_sgm_large_taichi[v_idx + det_elem_vertical_recon_range_begin, u_idx] = temp_sgm_val
                 #incorporate the vertical recon range
 
         

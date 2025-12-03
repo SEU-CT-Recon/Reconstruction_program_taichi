@@ -60,33 +60,33 @@ class Mgfpj:
         self.GenerateAngleArray(
             self.view_num, self.start_angle, self.scan_angle, self.array_angle_taichi)
         self.GenerateDectPixPosArray(
-            self.dect_elem_count_vertical, - self.dect_elem_height, self.dect_offset_vertical, self.array_v_taichi)
-        self.GenerateDectPixPosArray(self.dect_elem_count_horizontal*self.oversample_size, -self.dect_elem_width/self.oversample_size,
-                                     -self.dect_offset_horizontal, self.array_u_taichi)
+            self.det_elem_count_vertical, - self.det_elem_height, self.det_offset_vertical, self.array_v_taichi)
+        self.GenerateDectPixPosArray(self.det_elem_count_horizontal*self.oversample_size, -self.det_elem_width/self.oversample_size,
+                                     -self.det_offset_horizontal, self.array_u_taichi)
 
         for file in os.listdir(self.input_dir):
             if re.match(self.input_files_pattern, file):
                 if self.ReadImage(file):
                     print('\nForward projecting %s ...' % self.input_path)
                     self.file_processed_count += 1
-                    for v_idx in range(self.dect_elem_count_vertical):
+                    for v_idx in range(self.det_elem_count_vertical):
 
                         str = 'Forward projecting slice: %4d/%4d' % (
-                            v_idx+1, self.dect_elem_count_vertical)
+                            v_idx+1, self.det_elem_count_vertical)
                         print('\r' + str, end='')
                         self.ForwardProjectionBilinear(self.img_image_taichi, self.img_sgm_large_taichi, self.array_u_taichi,
                                                        self.array_v_taichi, self.array_angle_taichi, self.img_dim, self.img_dim_z,
-                                                       self.dect_elem_count_horizontal*self.oversample_size,
-                                                       self.dect_elem_count_vertical, self.view_num, self.img_pix_size, self.img_voxel_height,
-                                                       self.source_isocenter_dis, self.source_dect_dis, self.cone_beam,
+                                                       self.det_elem_count_horizontal*self.oversample_size,
+                                                       self.det_elem_count_vertical, self.view_num, self.img_pix_size, self.img_voxel_height,
+                                                       self.source_isocenter_dis, self.source_det_dis, self.cone_beam,
                                                        self.helical_scan, self.helical_pitch, v_idx, self.fpj_step_size,
                                                        self.img_center_x, self.img_center_y, self.img_center_z, self.curved_dect)
 
                         self.BinSinogram(self.img_sgm_large_taichi, self.img_sgm_taichi,
-                                         self.dect_elem_count_horizontal, self.view_num, self.oversample_size)
+                                         self.det_elem_count_horizontal, self.view_num, self.oversample_size)
                         if self.add_possion_noise:
                             self.AddPossionNoise(
-                                self.img_sgm_taichi, self.photon_number, self.dect_elem_count_horizontal, self.view_num)
+                                self.img_sgm_taichi, self.photon_number, self.det_elem_count_horizontal, self.view_num)
 
                         self.TransferToRAM(v_idx)
 
@@ -228,41 +228,41 @@ class Mgfpj:
             self.curved_dect = False 
 
         if 'DetectorElementCountHorizontal' in config_dict:
-            self.dect_elem_count_horizontal = config_dict['DetectorElementCountHorizontal']
+            self.det_elem_count_horizontal = config_dict['DetectorElementCountHorizontal']
         elif 'SinogramWidth' in config_dict:
-            self.dect_elem_count_horizontal = config_dict['SinogramWidth']
+            self.det_elem_count_horizontal = config_dict['SinogramWidth']
         elif 'DetectorElementCount' in config_dict:
-            self.dect_elem_count_horizontal = config_dict['DetectorElementCount']
+            self.det_elem_count_horizontal = config_dict['DetectorElementCount']
         else:
             print("ERROR: Can not find DetectorElementCountHorizontal (SinogramWidth or DetectorElementCount)!")
             sys.exit()
-        if self.dect_elem_count_horizontal <= 0:
+        if self.det_elem_count_horizontal <= 0:
             print("ERROR: DetectorElementCountHorizontal (SinogramWidth) should be larger than 0!")
             sys.exit()
-        elif self.dect_elem_count_horizontal % 1 != 0:
+        elif self.det_elem_count_horizontal % 1 != 0:
             print("ERROR: DetectorElementCountHorizontal (SinogramWidth) should be an integer!")
             sys.exit()
 
         if 'DetectorElementWidth' in config_dict:
-            self.dect_elem_width = config_dict['DetectorElementWidth']
+            self.det_elem_width = config_dict['DetectorElementWidth']
         elif 'DetectorElementSize' in config_dict:
-            self.dect_elem_width = config_dict['DetectorElementSize']
+            self.det_elem_width = config_dict['DetectorElementSize']
         else:
             print("ERROR: Can not find DetectorElementWidth (DetectorElementSize)!")
             sys.exit()
-        if self.dect_elem_width <= 0:
+        if self.det_elem_width <= 0:
             print("ERROR: DetectorElementWidth (DetectorElementSize) should be larger than 0!")
             sys.exit()
 
         if 'DetectorOffcenter' in config_dict:
-            self.dect_offset_horizontal = config_dict['DetectorOffcenter']
+            self.det_offset_horizontal = config_dict['DetectorOffcenter']
         elif 'DetectorOffsetHorizontal' in config_dict:
-            self.dect_offset_horizontal = config_dict['DetectorOffsetHorizontal']
+            self.det_offset_horizontal = config_dict['DetectorOffsetHorizontal']
         else:
-            self.dect_offset_horizontal = 0.0
+            self.det_offset_horizontal = 0.0
             print("Warning: Can not find DetectorOffsetHorizontal (DetectorOffcenter); Using default value 0")
             # self.return_information += "--Warning: Can not find horizontal detector offset; Using default value 0\n"
-        if not isinstance(self.dect_offset_horizontal, float) and not isinstance(self.dect_offset_horizontal, int):
+        if not isinstance(self.det_offset_horizontal, float) and not isinstance(self.det_offset_horizontal, int):
             print("ERROR: DetectorOffsetHorizontal (DetectorOffcenter) should be a number!")
             sys.exit()
 
@@ -276,19 +276,19 @@ class Mgfpj:
                 print('ERROR: SourceIsocenterDistance must be positive!')
                 sys.exit()
         else:
-            self.source_isocenter_dis = self.dect_elem_count_horizontal * self.dect_elem_width * 1000.0
+            self.source_isocenter_dis = self.det_elem_count_horizontal * self.det_elem_width * 1000.0
             print('Warning: Did not find SourceIsocenterDistance; Set to infinity!')
             
         if 'SourceDetectorDistance' in config_dict:
-            self.source_dect_dis = config_dict['SourceDetectorDistance']
-            if not isinstance(self.source_dect_dis, float) and not isinstance(self.source_dect_dis, int):
+            self.source_det_dis = config_dict['SourceDetectorDistance']
+            if not isinstance(self.source_det_dis, float) and not isinstance(self.source_det_dis, int):
                 print('ERROR: SourceDetectorDistance must be a number!')
                 sys.exit()
-            if self.source_dect_dis<=0.0:
+            if self.source_det_dis<=0.0:
                 print('ERROR: SourceDetectorDistance must be positive!')
                 sys.exit()
         else:
-            self.source_dect_dis = self.dect_elem_count_horizontal * self.dect_elem_width * 1000.0
+            self.source_det_dis = self.det_elem_count_horizontal * self.det_elem_width * 1000.0
             print('Warning: Did not find SourceDetectorDistance; Set to infinity!')
         
         # image rotation (Start Angle) for forward projection
@@ -351,9 +351,9 @@ class Mgfpj:
             self.fpj_step_size = 0.2
 
         if 'PMatrixDetectorElementSize' in config_dict:
-            self.pmatrix_dect_elem_width = config_dict['PMatrixDetectorElementSize']
+            self.pmatrix_det_elem_width = config_dict['PMatrixDetectorElementSize']
         else:
-            self.pmatrix_dect_elem_width = self.dect_elem_width
+            self.pmatrix_det_elem_width = self.det_elem_width
 
         ######## parameters related to cone beam scan ########
         if self.cone_beam:
@@ -368,9 +368,9 @@ class Mgfpj:
                 sys.exit()
 
             if 'DetectorElementCountVertical' in config_dict:
-                self.dect_elem_count_vertical = config_dict['DetectorElementCountVertical']
+                self.det_elem_count_vertical = config_dict['DetectorElementCountVertical']
             elif 'DetectorZElementCount' in config_dict:
-                self.dect_elem_count_vertical = config_dict['DetectorZElementCount']
+                self.det_elem_count_vertical = config_dict['DetectorZElementCount']
             else:
                 print(
                     "ERROR: Can not find detector element count along vertical direction!")
@@ -378,26 +378,26 @@ class Mgfpj:
 
             # detector element height
             if 'SliceThickness' in config_dict:
-                self.dect_elem_height = config_dict['SliceThickness']
+                self.det_elem_height = config_dict['SliceThickness']
             elif 'DetectorElementHeight' in config_dict:
-                self.dect_elem_height = config_dict['DetectorElementHeight']
+                self.det_elem_height = config_dict['DetectorElementHeight']
             else:
                 print("ERROR: Can not find detector element height for cone beam recon! ")
                 sys.exit()
 
             # detector offset vertical
             if 'DetectorZOffcenter' in config_dict:
-                self.dect_offset_vertical = config_dict['DetectorZOffcenter']
+                self.det_offset_vertical = config_dict['DetectorZOffcenter']
             elif 'DetectorOffsetVertical' in config_dict:
-                self.dect_offset_vertical = config_dict['DetectorOffsetVertical']
+                self.det_offset_vertical = config_dict['DetectorOffsetVertical']
             else:
-                self.dect_offset_vertical = 0.0
+                self.det_offset_vertical = 0.0
                 print("Warning: Can not find vertical detector offset for cone beam recon; Using default value 0")
         else:
-            self.dect_elem_count_vertical = self.img_dim_z
+            self.det_elem_count_vertical = self.img_dim_z
             self.img_voxel_height = 0.0
-            self.dect_elem_height = 0.0
-            self.dect_offset_vertical = 0.0
+            self.det_elem_height = 0.0
+            self.det_offset_vertical = 0.0
 
         ######## whether images are converted to HU for the input image ########
         if 'WaterMu' in config_dict:
@@ -419,7 +419,8 @@ class Mgfpj:
             self.img_center_z = self.img_voxel_height * \
                 (self.img_dim_z - 1) / 2.0 * np.sign(self.helical_pitch)
             print("Warning: Did not find image center along Z direction in the config file!")
-            print("For helical scans, the first view begins with the bottom or the top of the image object; the image center along Z direction is set accordingly!")
+            print("For helical scans, the first view begins with the bottom or the top of the image object;") 
+            print("ImageCenterZ is re-set accordingly to be %.1f mm!" %self.img_center_z)
 
         # NEW! add poisson noise to generated sinogram
         if 'PhotonNumber' in config_dict:
@@ -432,19 +433,19 @@ class Mgfpj:
         self.img_image = np.zeros(
             (self.img_dim_z, self.img_dim, self.img_dim), dtype=np.float32)
         # for sgm in ram, we initialize a 3D buffer
-        self.img_sgm = np.zeros((self.dect_elem_count_vertical, self.view_num,
-                                self.dect_elem_count_horizontal), dtype=np.float32)
+        self.img_sgm = np.zeros((self.det_elem_count_vertical, self.view_num,
+                                self.det_elem_count_horizontal), dtype=np.float32)
         self.array_u_taichi = ti.field(
-            dtype=ti.f32, shape=self.dect_elem_count_horizontal*self.oversample_size)
+            dtype=ti.f32, shape=self.det_elem_count_horizontal*self.oversample_size)
         self.array_v_taichi = ti.field(
-            dtype=ti.f32, shape=self.dect_elem_count_vertical)
+            dtype=ti.f32, shape=self.det_elem_count_vertical)
         self.img_image_taichi = ti.field(dtype=ti.f32, shape=(
             self.img_dim_z, self.img_dim, self.img_dim))
         # for sgm in gpu ram, we initialize 2D buffer; since gpu ram is limited
         self.img_sgm_large_taichi = ti.field(dtype=ti.f32, shape=(
-            1, self.view_num, self.dect_elem_count_horizontal*self.oversample_size), order='ijk', needs_dual=True)
+            1, self.view_num, self.det_elem_count_horizontal*self.oversample_size), order='ijk', needs_dual=True)
         self.img_sgm_taichi = ti.field(dtype=ti.f32, shape=(
-            1, self.view_num, self.dect_elem_count_horizontal))
+            1, self.view_num, self.det_elem_count_horizontal))
         self.array_angle_taichi = ti.field(dtype=ti.f32, shape=self.view_num)
 
     @ti.kernel
@@ -454,19 +455,19 @@ class Mgfpj:
             array_angle_taichi[i] = (scan_angle / view_num * i + start_angle)
 
     @ti.kernel
-    def GenerateDectPixPosArray(self, dect_elem_count_horizontal: ti.i32, dect_elem_width: ti.f32, dect_offset_horizontal: ti.f32, array_u_taichi: ti.template()):
-        for i in ti.ndrange(dect_elem_count_horizontal):
-            array_u_taichi[i] = (i - (dect_elem_count_horizontal - 1) /
-                                 2.0) * dect_elem_width + dect_offset_horizontal
+    def GenerateDectPixPosArray(self, det_elem_count_horizontal: ti.i32, det_elem_width: ti.f32, det_offset_horizontal: ti.f32, array_u_taichi: ti.template()):
+        for i in ti.ndrange(det_elem_count_horizontal):
+            array_u_taichi[i] = (i - (det_elem_count_horizontal - 1) /
+                                 2.0) * det_elem_width + det_offset_horizontal
 
     @ti.kernel
     def ForwardProjectionBilinear(self, img_image_taichi: ti.template(), img_sgm_large_taichi: ti.template(),
                                   array_u_taichi: ti.template(), array_v_taichi: ti.template(),
                                   array_angle_taichi: ti.template(), img_dim: ti.i32, img_dim_z: ti.i32,
-                                  dect_elem_count_horizontal_oversamplesize: ti.i32,
-                                  dect_elem_count_vertical: ti.i32, view_num: ti.i32,
+                                  det_elem_count_horizontal_oversamplesize: ti.i32,
+                                  det_elem_count_vertical: ti.i32, view_num: ti.i32,
                                   img_pix_size: ti.f32, img_voxel_height: ti.f32, source_isocenter_dis: ti.f32,
-                                  source_dect_dis: ti.f32, cone_beam: ti.i32, helical_scan: ti.i32, helical_pitch: ti.f32,
+                                  source_det_dis: ti.f32, cone_beam: ti.i32, helical_scan: ti.i32, helical_pitch: ti.f32,
                                   v_idx: ti.i32, fpj_step_size: ti.f32, img_center_x: ti.f32,
                                   img_center_y: ti.f32, img_center_z: ti.f32, curved_dect: ti.i32):
 
@@ -476,7 +477,7 @@ class Mgfpj:
 
         # define aliases
         sid = source_isocenter_dis  # alias
-        sdd = source_dect_dis  # alias
+        sdd = source_det_dis  # alias
 
         # calculate the position of the source
         source_pos_x = sid
@@ -500,8 +501,8 @@ class Mgfpj:
         z_0 = -(img_dim_z - 1.0) / 2.0 * img_voxel_height + img_center_z
 
         # initialize coordinate for the detector element
-        dect_elem_pos_x = dect_elem_pos_y = dect_elem_pos_z = 0.0
-        source_dect_elem_dis = 0.0  # initialize detector element to source distance
+        det_elem_pos_x = det_elem_pos_y = det_elem_pos_z = 0.0
+        source_det_elem_dis = 0.0  # initialize detector element to source distance
         # initialize detector element to source unit vector
         unit_vec_lambda_x = unit_vec_lambda_y = unit_vec_lambda_z = 0.0
         # lower range for the line integral
@@ -519,35 +520,35 @@ class Mgfpj:
             total_scan_angle = abs((array_angle_taichi[view_num - 1] - array_angle_taichi[0])) / (view_num - 1) * view_num
             num_laps = total_scan_angle / (PI * 2)
             z_dis_per_view = helical_pitch * (num_laps / view_num) * (abs(
-                array_v_taichi[1] - array_v_taichi[0]) * dect_elem_count_vertical) / (sdd / sid)
+                array_v_taichi[1] - array_v_taichi[0]) * det_elem_count_vertical) / (sdd / sid)
 
         # count of steps
         count_steps = int(
             ti.floor((l_max - l_min)/(fpj_step_size * voxel_diagonal_size)))
 
-        for u_idx, angle_idx in ti.ndrange(dect_elem_count_horizontal_oversamplesize, view_num):
+        for u_idx, angle_idx in ti.ndrange(det_elem_count_horizontal_oversamplesize, view_num):
 
             if self.curved_dect:
                 gamma_prime = ( - array_u_taichi[u_idx]) / sdd #conterclockwise is positive, corresponding to -y direction
-                dect_elem_pos_x = -sdd * ti.cos(gamma_prime) + sid
+                det_elem_pos_x = -sdd * ti.cos(gamma_prime) + sid
                 # positive u direction is - y
-                dect_elem_pos_y = -sdd * ti.sin(gamma_prime)#negative gamma_prime corresponds to positive y
+                det_elem_pos_y = -sdd * ti.sin(gamma_prime)#negative gamma_prime corresponds to positive y
             else:
-                dect_elem_pos_x = - (sdd - sid)
+                det_elem_pos_x = - (sdd - sid)
                 # positive u direction is - y
-                dect_elem_pos_y = array_u_taichi[u_idx]
+                det_elem_pos_y = array_u_taichi[u_idx]
                 
             #add this distance to z position to simulate helical scan
-            dect_elem_pos_z = array_v_taichi[v_idx] + z_dis_per_view * angle_idx
+            det_elem_pos_z = array_v_taichi[v_idx] + z_dis_per_view * angle_idx
             # assume that the source and the detector moves upward for a helical scan (pitch>0)
             source_pos_z = z_dis_per_view * angle_idx
 
-            source_dect_elem_dis = ((dect_elem_pos_x - source_pos_x)**2 + (
-                dect_elem_pos_y - source_pos_y)**2 + (dect_elem_pos_z - source_pos_z)**2) ** 0.5
+            source_det_elem_dis = ((det_elem_pos_x - source_pos_x)**2 + (
+                det_elem_pos_y - source_pos_y)**2 + (det_elem_pos_z - source_pos_z)**2) ** 0.5
 
-            unit_vec_lambda_x = (dect_elem_pos_x - source_pos_x) / source_dect_elem_dis
-            unit_vec_lambda_y = (dect_elem_pos_y - source_pos_y) / source_dect_elem_dis
-            unit_vec_lambda_z = (dect_elem_pos_z - source_pos_z) / source_dect_elem_dis
+            unit_vec_lambda_x = (det_elem_pos_x - source_pos_x) / source_det_elem_dis
+            unit_vec_lambda_y = (det_elem_pos_y - source_pos_y) / source_det_elem_dis
+            unit_vec_lambda_z = (det_elem_pos_z - source_pos_z) / source_det_elem_dis
 
             temp_sgm_val = 0.0
 
@@ -606,9 +607,9 @@ class Mgfpj:
             img_sgm_large_taichi[0, angle_idx, u_idx] = temp_sgm_val
 
     @ti.kernel
-    def BinSinogram(self, img_sgm_large_taichi: ti.template(), img_sgm_taichi: ti.template(), dect_elem_count_horizontal: ti.i32,
+    def BinSinogram(self, img_sgm_large_taichi: ti.template(), img_sgm_taichi: ti.template(), det_elem_count_horizontal: ti.i32,
                     view_num: ti.i32, bin_size: ti.i32):
-        for angle_idx, u_idx in ti.ndrange(view_num, dect_elem_count_horizontal):
+        for angle_idx, u_idx in ti.ndrange(view_num, det_elem_count_horizontal):
             img_sgm_taichi[0, angle_idx, u_idx] = 0.0
             for i in ti.ndrange(bin_size):
                 img_sgm_taichi[0, angle_idx, u_idx] += img_sgm_large_taichi[0,angle_idx, u_idx * bin_size + i]
@@ -640,9 +641,9 @@ class Mgfpj:
         self.img_sgm[v_idx, :, :] = self.img_sgm_taichi.to_numpy()
 
     @ti.kernel
-    def AddPossionNoise(self, img_sgm_taichi: ti.template(), photon_number: ti.f32, dect_elem_count_horizontal: ti.i32,
+    def AddPossionNoise(self, img_sgm_taichi: ti.template(), photon_number: ti.f32, det_elem_count_horizontal: ti.i32,
                         view_num: ti.i32):
-        for u_idx, angle_idx in ti.ndrange(dect_elem_count_horizontal, view_num):
+        for u_idx, angle_idx in ti.ndrange(det_elem_count_horizontal, view_num):
             transmitted_photon_number = photon_number * \
                 ti.exp(-img_sgm_taichi[0, angle_idx, u_idx])
             transmitted_photon_number = transmitted_photon_number + \

@@ -60,21 +60,21 @@ class Mgfbp:
                     self.file_processed_count += 1 
                     print('Reconstructing %s ...' % self.input_path)
                     if self.bool_bh_correction:
-                        self.BHCorrection(self.dect_elem_count_vertical_actual, self.view_num, self.dect_elem_count_horizontal,self.img_sgm,\
+                        self.BHCorrection(self.det_elem_count_vertical_actual, self.view_num, self.det_elem_count_horizontal,self.img_sgm,\
                                           self.array_bh_coefficients_taichi,self.bh_corr_order)#pass img_sgm directly into this function using unified memory
-                    self.WeightSgm(self.dect_elem_count_vertical_actual,self.short_scan,self.curved_dect,\
-                                   self.total_scan_angle,self.view_num,self.dect_elem_count_horizontal,\
-                                       self.source_dect_dis,self.img_sgm,\
+                    self.WeightSgm(self.det_elem_count_vertical_actual,self.short_scan,self.curved_dect,\
+                                   self.total_scan_angle,self.view_num,self.det_elem_count_horizontal,\
+                                       self.source_det_dis,self.img_sgm,\
                                            self.array_u_taichi,self.array_v_taichi,self.array_angle_taichi)#pass img_sgm directly into this function using unified memory
                     print('Filtering sinogram ...')
                     self.FilterSinogram()
                     self.SaveFilteredSinogram()
                                         
                     print('Back Projection ...')
-                    self.BackProjectionPixelDriven(self.dect_elem_count_vertical_actual, self.img_dim, self.dect_elem_count_horizontal, \
-                                    self.view_num, self.dect_elem_width,self.img_pix_size, self.source_isocenter_dis, self.source_dect_dis,self.total_scan_angle,\
+                    self.BackProjectionPixelDriven(self.det_elem_count_vertical_actual, self.img_dim, self.det_elem_count_horizontal, \
+                                    self.view_num, self.det_elem_width,self.img_pix_size, self.source_isocenter_dis, self.source_det_dis,self.total_scan_angle,\
                                     self.array_angle_taichi, self.img_rot,self.img_sgm_filtered_taichi,self.img_recon_taichi,\
-                                    self.array_u_taichi,self.short_scan,self.cone_beam,self.dect_elem_height,\
+                                    self.array_u_taichi,self.short_scan,self.cone_beam,self.det_elem_height,\
                                         self.array_v_taichi,self.img_dim_z,self.img_voxel_height,\
                                             self.img_center_x,self.img_center_y,self.img_center_z,self.curved_dect,\
                                                 self.bool_apply_pmatrix,self.array_pmatrix_taichi, self.recon_view_mode)
@@ -219,53 +219,53 @@ class Mgfbp:
             self.curved_dect = False 
             
         if 'DetectorElementCountHorizontal' in config_dict:
-            self.dect_elem_count_horizontal = config_dict['DetectorElementCountHorizontal']
+            self.det_elem_count_horizontal = config_dict['DetectorElementCountHorizontal']
         elif 'SinogramWidth' in config_dict:
-            self.dect_elem_count_horizontal = config_dict['SinogramWidth']
+            self.det_elem_count_horizontal = config_dict['SinogramWidth']
         else:
             print("ERROR: Can not find detector element count along horizontal direction!")
             sys.exit()
-        if self.dect_elem_count_horizontal <= 0:
+        if self.det_elem_count_horizontal <= 0:
             print("ERROR: DetectorElementCountHorizontal (SinogramWidth) should be larger than 0!")
             sys.exit()
-        elif self.dect_elem_count_horizontal % 1 != 0:
+        elif self.det_elem_count_horizontal % 1 != 0:
             print("ERROR: DetectorElementCountHorizontal (SinogramWidth) should be an integer!")
             sys.exit()
             
         if 'DetectorElementWidth' in config_dict:
-            self.dect_elem_width = config_dict['DetectorElementWidth']
+            self.det_elem_width = config_dict['DetectorElementWidth']
         elif 'DetectorElementSize' in config_dict:
-            self.dect_elem_width = config_dict['DetectorElementSize']
+            self.det_elem_width = config_dict['DetectorElementSize']
         else:
             print("ERROR: Can not find detector element width!")
             sys.exit()
-        if self.dect_elem_width <= 0:
+        if self.det_elem_width <= 0:
             print("ERROR: DetectorElementWidth (DetectorElementSize) should be larger than 0!")
             sys.exit()
         
         self.positive_u_is_positive_y = -1 #by default, positive u direction is -y direction
         
         if 'DetectorOffcenter' in config_dict:
-            self.dect_offset_horizontal = config_dict['DetectorOffcenter']
+            self.det_offset_horizontal = config_dict['DetectorOffcenter']
         elif 'DetectorOffsetHorizontal' in config_dict:
-            self.dect_offset_horizontal = config_dict['DetectorOffsetHorizontal']
+            self.det_offset_horizontal = config_dict['DetectorOffsetHorizontal']
         else:
             print("Warning: Can not find horizontal detector offset; Using default value 0")
-        if not isinstance(self.dect_offset_horizontal, float) and not isinstance(self.dect_offset_horizontal, int) and not isinstance(self.dect_offset_horizontal, list):
+        if not isinstance(self.det_offset_horizontal, float) and not isinstance(self.det_offset_horizontal, int) and not isinstance(self.det_offset_horizontal, list):
             print("ERROR: DetectorOffsetHorizontal (DetectorOffcenter) should be a number!")
             sys.exit()
             
         if 'DetectorElementCountVertical' in config_dict:
-            self.dect_elem_count_vertical = config_dict['DetectorElementCountVertical']
+            self.det_elem_count_vertical = config_dict['DetectorElementCountVertical']
         elif 'SliceCount' in config_dict:
-            self.dect_elem_count_vertical = config_dict['SliceCount']
+            self.det_elem_count_vertical = config_dict['SliceCount']
         else:
             print("ERROR: Can not find detector element count along vertical direction!")
             sys.exit()
-        if self.dect_elem_count_vertical <= 0:
+        if self.det_elem_count_vertical <= 0:
             print("ERROR: DetectorElementCountVertical (SliceCount) should be larger than 0!")
             sys.exit()
-        elif self.dect_elem_count_vertical % 1 != 0:
+        elif self.det_elem_count_vertical % 1 != 0:
             print("ERROR: DetectorElementCountVertical (SliceCount) should be an integer!")
             sys.exit()
         
@@ -275,37 +275,37 @@ class Mgfbp:
             if not isinstance(temp_array, list) or len(temp_array)!=2:
                 print("ERROR: DetectorElementVerticalReconRange should be an array with two numbers!")
                 sys.exit()
-            self.dect_elem_vertical_recon_range_begin = temp_array[0]
-            self.dect_elem_vertical_recon_range_end = temp_array[1]
-            if self.dect_elem_vertical_recon_range_end > self.dect_elem_count_vertical-1 or \
-                self.dect_elem_vertical_recon_range_begin <0:
+            self.det_elem_vertical_recon_range_begin = temp_array[0]
+            self.det_elem_vertical_recon_range_end = temp_array[1]
+            if self.det_elem_vertical_recon_range_end > self.det_elem_count_vertical-1 or \
+                self.det_elem_vertical_recon_range_begin <0:
                 print('ERROR: Out of detector row range!')
                 sys.exit()
-            if self.dect_elem_vertical_recon_range_begin%1!=0 or\
-                self.dect_elem_vertical_recon_range_end%1!=0:
+            if self.det_elem_vertical_recon_range_begin%1!=0 or\
+                self.det_elem_vertical_recon_range_end%1!=0:
                 print('ERROR: DetectorElementVerticalReconRange must be integers!')
                 sys.exit()
             print(f"--Reconstructing from detector row #{temp_array[0]:d} to #{temp_array[1]:d}")
-            self.dect_elem_count_vertical_actual = temp_array[1] - temp_array[0] + 1 
-            #actual dect_elem_count_vertical defined by the row range
+            self.det_elem_count_vertical_actual = temp_array[1] - temp_array[0] + 1 
+            #actual det_elem_count_vertical defined by the row range
         else:
-            self.dect_elem_vertical_recon_range_begin = 0
-            self.dect_elem_vertical_recon_range_end = self.dect_elem_count_vertical-1
-            self.dect_elem_count_vertical_actual = self.dect_elem_count_vertical
+            self.det_elem_vertical_recon_range_begin = 0
+            self.det_elem_vertical_recon_range_end = self.det_elem_count_vertical-1
+            self.det_elem_count_vertical_actual = self.det_elem_count_vertical
             
         #NEW! apply gauss smooth along z direction
         if 'DetectorElementVerticalGaussFilterSize' in config_dict:
-            self.dect_elem_vertical_gauss_filter_size = config_dict['DetectorElementVerticalGaussFilterSize']
-            if self.dect_elem_vertical_gauss_filter_size <= 0:
+            self.det_elem_vertical_gauss_filter_size = config_dict['DetectorElementVerticalGaussFilterSize']
+            if self.det_elem_vertical_gauss_filter_size <= 0:
                 print('ERROR: DetectorElementVerticalGaussFilterSize should be larger than 0!')
                 sys.exit()
             self.apply_gauss_vertical = True
             print("--Apply Gaussian filter along the vertical direction of the detector")
         else:
             self.apply_gauss_vertical = False
-            self.dect_elem_vertical_gauss_filter_size = 0.0001
+            self.det_elem_vertical_gauss_filter_size = 0.0001
             
-        self.array_kernel_gauss_vertical_taichi = ti.field(dtype=ti.f32, shape=2*self.dect_elem_count_vertical_actual-1)
+        self.array_kernel_gauss_vertical_taichi = ti.field(dtype=ti.f32, shape=2*self.det_elem_count_vertical_actual-1)
             
         
         ######## parameters related to CT scan rotation ########
@@ -368,19 +368,19 @@ class Mgfbp:
                 print('ERROR: SourceIsocenterDistance must be positive!')
                 sys.exit()
         else:
-            self.source_isocenter_dis = self.dect_elem_count_horizontal * self.dect_elem_width * 1000.0
+            self.source_isocenter_dis = self.det_elem_count_horizontal * self.det_elem_width * 1000.0
             print('Warning: Did not find SourceIsocenterDistance; Set to infinity!')
           
         if 'SourceDetectorDistance' in config_dict:
-            self.source_dect_dis = config_dict['SourceDetectorDistance']
-            if not isinstance(self.source_dect_dis, float) and not isinstance(self.source_dect_dis, int):
+            self.source_det_dis = config_dict['SourceDetectorDistance']
+            if not isinstance(self.source_det_dis, float) and not isinstance(self.source_det_dis, int):
                 print('ERROR: SourceDetectorDistance must be a number!')
                 sys.exit()
-            if self.source_dect_dis<=0.0:
+            if self.source_det_dis<=0.0:
                 print('ERROR: SourceDetectorDistance must be positive!')
                 sys.exit()
         else:
-            self.source_dect_dis = self.dect_elem_count_horizontal * self.dect_elem_width * 1000.0
+            self.source_det_dis = self.det_elem_count_horizontal * self.det_elem_width * 1000.0
             print('Warning: Did not find SourceDetectorDistance; Set to infinity!')
         
         
@@ -454,8 +454,8 @@ class Mgfbp:
         elif 'GaussianApodizedRamp' in config_dict:
             self.kernel_name = 'GaussianApodizedRamp'
             self.kernel_param = config_dict['GaussianApodizedRamp'] 
-            self.array_kernel_ramp_taichi = ti.field(dtype=ti.f32, shape=2*self.dect_elem_count_horizontal-1)
-            self.array_kernel_gauss_taichi = ti.field(dtype=ti.f32, shape=2*self.dect_elem_count_horizontal-1)
+            self.array_kernel_ramp_taichi = ti.field(dtype=ti.f32, shape=2*self.det_elem_count_horizontal-1)
+            self.array_kernel_gauss_taichi = ti.field(dtype=ti.f32, shape=2*self.det_elem_count_horizontal-1)
             #当进行高斯核运算的时候需要两个额外的数组存储相关数据
         elif 'None' in config_dict:
             self.kernel_name = 'None'
@@ -499,16 +499,16 @@ class Mgfbp:
             
             #detector element height
             if 'SliceThickness' in config_dict:
-                self.dect_elem_height = config_dict['SliceThickness']
+                self.det_elem_height = config_dict['SliceThickness']
             elif 'DetectorElementHeight' in config_dict:
-                self.dect_elem_height = config_dict['DetectorElementHeight']
+                self.det_elem_height = config_dict['DetectorElementHeight']
             else:
                 print("ERROR: Can not find detector element height for cone beam recon! ")
                 sys.exit()
-            if not isinstance(self.dect_elem_height,float) and not isinstance(self.dect_elem_height,int):
+            if not isinstance(self.det_elem_height,float) and not isinstance(self.det_elem_height,int):
                 print('ERROR: DetectorElementHeight (SliceThickness) must be a number!')
                 sys.exit()
-            if self.dect_elem_height <= 0:
+            if self.det_elem_height <= 0:
                 print('ERROR: DetectorElementHeight (SliceThickness) must be positive!')
                 sys.exit()
                 
@@ -586,7 +586,7 @@ class Mgfbp:
                         print('ERROR: PMatrixDetectorElementWidth must be positive!')
                         sys.exit()
                 else:
-                    self.pmatrix_elem_width = self.dect_elem_width;
+                    self.pmatrix_elem_width = self.det_elem_width;
                 
                 if 'PMatrixDetectorElementHeight' in config_dict:
                     print('--PMatrix detector pixel height is different from the CT scan')
@@ -598,7 +598,7 @@ class Mgfbp:
                         print('ERROR: PMatrixDetectorElementHeight must be positive!')
                         sys.exit()
                 else:
-                    self.pmatrix_elem_height = self.dect_elem_height;
+                    self.pmatrix_elem_height = self.det_elem_height;
                 
                 
                 self.ChangePMatrix_SourceTrajectory() 
@@ -607,13 +607,13 @@ class Mgfbp:
                 #(source positions will be on the z=0 plane with center at the origin)
                 #(source position for the first view will be on the +x axis)
                 #if not, this function will output the parameters from pmatrix
-                #the parmaters include: source_isocenter_dis,source_dect_dis, 
-                #dect_offset_horizontal, dect_offset_vertical and total_scan_angle. 
+                #the parmaters include: source_isocenter_dis,source_det_dis, 
+                #det_offset_horizontal, det_offset_vertical and total_scan_angle. 
                 #save the updated parameters values to the dictionary
                 config_dict['SourceIsocenterDistance'] = self.source_isocenter_dis
-                config_dict['SourceDetectorDistance'] = self.source_dect_dis
-                config_dict['DetectorOffsetHorizontal'] = self.dect_offset_horizontal
-                config_dict['DetectorOffsetVertical'] = self.dect_offset_vertical
+                config_dict['SourceDetectorDistance'] = self.source_det_dis
+                config_dict['DetectorOffsetHorizontal'] = self.det_offset_horizontal
+                config_dict['DetectorOffsetVertical'] = self.det_offset_vertical
                 config_dict['TotalScanAngle'] = self.total_scan_angle / PI * 180.0
                 self.ChangePMatrix_PMatrixPixelSize()
                 self.ChangePMatrix_VerticalReconRange()
@@ -622,13 +622,13 @@ class Mgfbp:
             if not self.bool_apply_pmatrix:
                 #detector offset vertical (is only effective when pmatrix is not applied)
                 if 'SliceOffCenter' in config_dict:
-                    self.dect_offset_vertical = config_dict['SliceOffCenter'] 
+                    self.det_offset_vertical = config_dict['SliceOffCenter'] 
                 elif 'DetectorOffsetVertical' in config_dict:
-                    self.dect_offset_vertical = config_dict['DetectorOffsetVertical']
+                    self.det_offset_vertical = config_dict['DetectorOffsetVertical']
                 else: 
-                    self.dect_offset_vertical = 0
+                    self.det_offset_vertical = 0
                     print("Warning: Can not find vertical detector offset for cone beam recon; Using default value 0")
-                if not isinstance(self.dect_offset_vertical,float) and not isinstance(self.dect_offset_vertical,int):
+                if not isinstance(self.det_offset_vertical,float) and not isinstance(self.det_offset_vertical,int):
                     print('ERROR: DetectorOffsetVertical (SliceOffCenter) must be a number!')
                     sys.exit()
             
@@ -643,12 +643,12 @@ class Mgfbp:
             else:
                 #ImageCenterZ is calculated from detector offset along vertical direction
                 #may use the updated value
-                current_center_row_idx = (self.dect_elem_vertical_recon_range_end +  self.dect_elem_vertical_recon_range_begin)/2
-                distance_to_original_detector_center_row = (current_center_row_idx - (self.dect_elem_count_vertical-1)/2) * self.dect_elem_height
+                current_center_row_idx = (self.det_elem_vertical_recon_range_end +  self.det_elem_vertical_recon_range_begin)/2
+                distance_to_original_detector_center_row = (current_center_row_idx - (self.det_elem_count_vertical-1)/2) * self.det_elem_height
                 if self.first_slice_top_row:
                     distance_to_original_detector_center_row = distance_to_original_detector_center_row * (-1)
-                self.img_center_z = (self.dect_offset_vertical + distance_to_original_detector_center_row)\
-                    * self.source_isocenter_dis / self.source_dect_dis
+                self.img_center_z = (self.det_offset_vertical + distance_to_original_detector_center_row)\
+                    * self.source_isocenter_dis / self.source_det_dis
                 print("Warning: Did not find image center along z direction! ")
                 print("Use default setting (central slice of the given detector recon row range)")
                 print("Image center at Z direction is %.4f mm (from run_mgfbp). " %self.img_center_z)
@@ -656,9 +656,9 @@ class Mgfbp:
                 config_dict['ImageCenterZ'] = self.img_center_z
         else:
             print("--Fan beam")
-            self.dect_elem_height = 0.0
-            self.dect_offset_vertical = 0.0
-            self.img_dim_z = self.dect_elem_count_vertical
+            self.det_elem_height = 0.0
+            self.det_offset_vertical = 0.0
+            self.img_dim_z = self.det_elem_count_vertical
             self.img_voxel_height = 0.0
             self.img_center_z = 0.0
             self.bool_apply_pmatrix = False
@@ -673,11 +673,11 @@ class Mgfbp:
         self.array_angle_taichi = ti.field(dtype=ti.f32, shape=self.view_num)
         #angel_taichi存储旋转角度，且经过计算之后以弧度制表示
         
-        self.array_recon_kernel_taichi = ti.field(dtype=ti.f32, shape=2*self.dect_elem_count_horizontal-1)
+        self.array_recon_kernel_taichi = ti.field(dtype=ti.f32, shape=2*self.det_elem_count_horizontal-1)
         #存储用于对正弦图进行卷积的核
-        self.array_u_taichi = ti.field(dtype=ti.f32,shape=self.dect_elem_count_horizontal)
+        self.array_u_taichi = ti.field(dtype=ti.f32,shape=self.det_elem_count_horizontal)
         #存储数组u
-        self.array_v_taichi = ti.field(dtype = ti.f32,shape = self.dect_elem_count_vertical_actual)
+        self.array_v_taichi = ti.field(dtype = ti.f32,shape = self.det_elem_count_vertical_actual)
         
         #save the parameters from pmatrix
         if 'SaveModifiedConfigFolder' in config_dict:
@@ -696,14 +696,14 @@ class Mgfbp:
                     config_sid['Value'] = self.source_isocenter_dis_each_view.tolist()
                     save_jsonc(save_config_folder_name + "/sid_file.jsonc", config_sid)
                     config_sdd = {}
-                    config_sdd['Value'] = self.source_dect_dis_each_view.tolist()
+                    config_sdd['Value'] = self.source_det_dis_each_view.tolist()
                     save_jsonc(save_config_folder_name + "/sdd_file.jsonc", config_sdd)
-                    config_dect_offset_horizontal = {}
-                    config_dect_offset_horizontal['Value'] = np.squeeze(self.dect_offset_horizontal_each_view).tolist()
-                    save_jsonc(save_config_folder_name + "/dect_offset_horizontal_file.jsonc", config_dect_offset_horizontal)
-                    config_dect_offset_vertical = {}
-                    config_dect_offset_vertical['Value'] = np.squeeze(self.dect_offset_vertical_each_view).tolist()
-                    save_jsonc(save_config_folder_name + "/dect_offset_vertical_file.jsonc", config_dect_offset_vertical)
+                    config_det_offset_horizontal = {}
+                    config_det_offset_horizontal['Value'] = np.squeeze(self.det_offset_horizontal_each_view).tolist()
+                    save_jsonc(save_config_folder_name + "/det_offset_horizontal_file.jsonc", config_det_offset_horizontal)
+                    config_det_offset_vertical = {}
+                    config_det_offset_vertical['Value'] = np.squeeze(self.det_offset_vertical_each_view).tolist()
+                    save_jsonc(save_config_folder_name + "/det_offset_vertical_file.jsonc", config_det_offset_vertical)
                     config_scan_angle = {}
                     config_scan_angle['Value'] = np.squeeze(self.scan_angle_each_view).tolist()
                     save_jsonc(save_config_folder_name + "/scan_angle_file.jsonc", config_scan_angle)
@@ -805,22 +805,22 @@ class Mgfbp:
             pmatrix_this_view = np.reshape(pmatrix_this_view,[12,1])#reshape the matrix to be a vector
             self.array_pmatrix[(view_idx*12):(view_idx+1)*12] = pmatrix_this_view[:,0] #update the pmatrix array
         #get offset value for each view
-        self.dect_offset_vertical_each_view = self.positive_v_is_positive_z * ((self.dect_elem_count_vertical *self.dect_elem_height / self.pmatrix_elem_height - 1) / 2.0\
+        self.det_offset_vertical_each_view = self.positive_v_is_positive_z * ((self.det_elem_count_vertical *self.det_elem_height / self.pmatrix_elem_height - 1) / 2.0\
                                        - v_center_rec) * self.pmatrix_elem_height #+z is positive
-        self.dect_offset_horizontal_each_view = -self.positive_u_is_positive_y * ((self.dect_elem_count_horizontal *self.dect_elem_width/ self.pmatrix_elem_width - 1) / 2.0\
+        self.det_offset_horizontal_each_view = -self.positive_u_is_positive_y * ((self.det_elem_count_horizontal *self.det_elem_width/ self.pmatrix_elem_width - 1) / 2.0\
                                        - u_center_rec) * self.pmatrix_elem_width #-y is positive based on mgfbp.exe convention
         #update the parameters from the pmatrix
-        self.dect_offset_vertical = np.squeeze(np.mean(self.dect_offset_vertical_each_view,axis = 0)).tolist()#calculate the mean offset
-        self.dect_offset_horizontal = np.squeeze(np.mean(self.dect_offset_horizontal_each_view,axis = 0)).tolist()#calculate the mean offset 
+        self.det_offset_vertical = np.squeeze(np.mean(self.det_offset_vertical_each_view,axis = 0)).tolist()#calculate the mean offset
+        self.det_offset_horizontal = np.squeeze(np.mean(self.det_offset_horizontal_each_view,axis = 0)).tolist()#calculate the mean offset 
         self.source_isocenter_dis_each_view = np.sqrt(np.sum(np.multiply(x_s_rec_final,x_s_rec_final), axis = 0))
-        self.source_dect_dis_each_view = np.sqrt(np.sum(np.multiply(x_d_center_x_s_rec_final,x_d_center_x_s_rec_final), axis = 0))
+        self.source_det_dis_each_view = np.sqrt(np.sum(np.multiply(x_d_center_x_s_rec_final,x_d_center_x_s_rec_final), axis = 0))
         self.source_isocenter_dis =  np.squeeze( np.mean(self.source_isocenter_dis_each_view, axis = 0)).tolist()
-        self.source_dect_dis =  np.squeeze( np.mean( self.source_dect_dis_each_view, axis = 0)).tolist()
+        self.source_det_dis =  np.squeeze( np.mean( self.source_det_dis_each_view, axis = 0)).tolist()
         print('Parameters are updated from PMatrix:')
         print('Mean Offset values are %.2f mm and %.2f mm for horizontal and vertical direction respectively;' \
-              %( self.dect_offset_horizontal, self.dect_offset_vertical))
+              %( self.det_offset_horizontal, self.det_offset_vertical))
         print('Mean Source to Isocenter Distance is %.2f mm;' %(self.source_isocenter_dis))
-        print('Mean Source to Detector Distance is %.2f mm;' %(self.source_dect_dis))
+        print('Mean Source to Detector Distance is %.2f mm;' %(self.source_det_dis))
         if self.short_scan:
             #update the total scan angle only when the scan is not 360 degree full scan
             #for 360 degree scan, if total scan angle is updated (e.g. 359.5 degree)
@@ -840,8 +840,8 @@ class Mgfbp:
             x_s = - np.matmul(matrix_A,pmatrix_this_view[:,3]).reshape([3,1])#calculate the source position
             e_v_0 = matrix_A[:,1] #calculate the unit vector along detector vertical direction
             e_u_0 = matrix_A[:,0] #calculate the unit vector along detector horizontal direction
-            e_v = e_v_0 * self.dect_elem_height / self.pmatrix_elem_height #change the unit vector along detector vertical direction
-            e_u = e_u_0 * self.dect_elem_width / self.pmatrix_elem_width #change the unit vector along detector horizontal direction
+            e_v = e_v_0 * self.det_elem_height / self.pmatrix_elem_height #change the unit vector along detector vertical direction
+            e_u = e_u_0 * self.det_elem_width / self.pmatrix_elem_width #change the unit vector along detector horizontal direction
             x_do_x_s = matrix_A[:,2] + np.multiply(0.5, e_v - e_v_0) + np.multiply(0.5, e_u - e_v_0)#change x_do - x_s
             matrix_A[:,0] = e_u; matrix_A[:,1] = e_v; matrix_A[:,2] = x_do_x_s; #update the matrix A
             matrix_A_inverse = np.linalg.inv(matrix_A) #recalculate the inverse of matrix A
@@ -858,7 +858,7 @@ class Mgfbp:
             matrix_A = np.linalg.inv(pmatrix_this_view[:,0:3])#matrix A is the inverse of the 3x3 matrix from the first three columns
             x_s = - np.matmul(matrix_A,pmatrix_this_view[:,3]).reshape([3,1])#calculate the source position
             e_v = matrix_A[:,1]#calculate the unit vector along detector vertical direction
-            matrix_A[:,2] = matrix_A[:,2] + np.multiply(self.dect_elem_vertical_recon_range_begin, e_v)
+            matrix_A[:,2] = matrix_A[:,2] + np.multiply(self.det_elem_vertical_recon_range_begin, e_v)
             #calculate the new x_do - x_s
             
             matrix_A_inverse = np.linalg.inv(matrix_A) #recalculate the inverse of matrix A
@@ -868,56 +868,56 @@ class Mgfbp:
         
         
     @ti.kernel
-    def GenerateHammingKernel(self,dect_elem_count_horizontal:ti.i32,dect_elem_width:ti.f32,kernel_param:ti.f32,\
-                              source_dect_dis:ti.f32, source_isocenter_dis:ti.f32, array_recon_kernel_taichi:ti.template(),curved_dect:ti.i32 ,dbt_or_not:ti.i32):
+    def GenerateHammingKernel(self,det_elem_count_horizontal:ti.i32,det_elem_width:ti.f32,kernel_param:ti.f32,\
+                              source_det_dis:ti.f32, source_isocenter_dis:ti.f32, array_recon_kernel_taichi:ti.template(),curved_dect:ti.i32 ,dbt_or_not:ti.i32):
         #计算hamming核分两步处理
         n = 0
-        bias = dect_elem_count_horizontal - 1
+        bias = det_elem_count_horizontal - 1
         t = kernel_param
-        for i in ti.ndrange(2 * dect_elem_count_horizontal - 1):  
+        for i in ti.ndrange(2 * det_elem_count_horizontal - 1):  
             n = i - bias
             #part 1 ramp
             if n == 0:
-                array_recon_kernel_taichi[i] = t / (4 * dect_elem_width * dect_elem_width)
+                array_recon_kernel_taichi[i] = t / (4 * det_elem_width * det_elem_width)
             elif n % 2 == 0:
                 array_recon_kernel_taichi[i] = 0
             else:
                 if curved_dect:
-                    temp_val = float(n) * dect_elem_width / source_dect_dis
-                    array_recon_kernel_taichi[i] = -t / (PI * PI * (source_dect_dis **2) * (temp_val - temp_val**3/3/2/1 + temp_val**5/5/4/3/2/1)**2)
+                    temp_val = float(n) * det_elem_width / source_det_dis
+                    array_recon_kernel_taichi[i] = -t / (PI * PI * (source_det_dis **2) * (temp_val - temp_val**3/3/2/1 + temp_val**5/5/4/3/2/1)**2)
                     #use taylor expansion to replace the built-in taichi.sin function
                     #the built-in taichi.sin function leads to 1% bias in calculation
                 else:
-                    array_recon_kernel_taichi[i] = -t / (PI * PI * (float(n) **2) * (dect_elem_width **2))
+                    array_recon_kernel_taichi[i] = -t / (PI * PI * (float(n) **2) * (det_elem_width **2))
             #part 2 cosine
             sgn = 1 if n % 2 == 0 else -1
-            array_recon_kernel_taichi[i] += (1-t)*(sgn/(2 * PI * dect_elem_width * dect_elem_width)*(1/(1 + 2 * n)+ 1 / (1 - 2 * n))- 1 / (PI * PI * dect_elem_width * dect_elem_width) * (1 / (1 + 2 * n) / (1 + 2 * n) + 1 / (1 - 2 * n) / (1 - 2 * n)))
+            array_recon_kernel_taichi[i] += (1-t)*(sgn/(2 * PI * det_elem_width * det_elem_width)*(1/(1 + 2 * n)+ 1 / (1 - 2 * n))- 1 / (PI * PI * det_elem_width * det_elem_width) * (1 / (1 + 2 * n) / (1 + 2 * n) + 1 / (1 - 2 * n) / (1 - 2 * n)))
             
             # #modified ramp for DBT
             if dbt_or_not == 1:
-                k_t = 0.01 / (2 * (dect_elem_width ))
+                k_t = 0.01 / (2 * (det_elem_width ))
                 if n == 0:
-                    array_recon_kernel_taichi[i] += k_t ** 2 * source_isocenter_dis / source_dect_dis 
-                    # add this * source_isocenter_dis / source_dect_dis factor so that images with different magnification look the same
-                    # there is an 1/source_dect_dis factor factor in the weightsgm function
+                    array_recon_kernel_taichi[i] += k_t ** 2 * source_isocenter_dis / source_det_dis 
+                    # add this * source_isocenter_dis / source_det_dis factor so that images with different magnification look the same
+                    # there is an 1/source_det_dis factor factor in the weightsgm function
                 else:
-                    temp_val = n * dect_elem_width * k_t * PI
-                    array_recon_kernel_taichi[i] += (ti.sin(temp_val) **2) / ((temp_val) **2) * (k_t **2) * source_isocenter_dis / source_dect_dis
+                    temp_val = n * det_elem_width * k_t * PI
+                    array_recon_kernel_taichi[i] += (ti.sin(temp_val) **2) / ((temp_val) **2) * (k_t **2) * source_isocenter_dis / source_det_dis
             else:
                 pass
             
 
     @ti.kernel
-    def GenerateGassianKernel(self,dect_elem_count_horizontal:ti.i32,dect_elem_width:ti.f32,kernel_param:ti.f32,array_kernel_gauss_taichi:ti.template()):
+    def GenerateGassianKernel(self,det_elem_count_horizontal:ti.i32,det_elem_width:ti.f32,kernel_param:ti.f32,array_kernel_gauss_taichi:ti.template()):
         #计算高斯
         temp_sum = 0.0
         delta = kernel_param
-        for i in ti.ndrange(2 * dect_elem_count_horizontal - 1):
-            n = i - (dect_elem_count_horizontal - 1)
+        for i in ti.ndrange(2 * det_elem_count_horizontal - 1):
+            n = i - (det_elem_count_horizontal - 1)
             array_kernel_gauss_taichi[i] = ti.exp(-n*n/2/delta/delta)
             temp_sum+=array_kernel_gauss_taichi[i]
-        for i in ti.ndrange(2 * dect_elem_count_horizontal - 1):
-            array_kernel_gauss_taichi[i] = array_kernel_gauss_taichi[i]/temp_sum / dect_elem_width
+        for i in ti.ndrange(2 * det_elem_count_horizontal - 1):
+            array_kernel_gauss_taichi[i] = array_kernel_gauss_taichi[i]/temp_sum / det_elem_width
 
 
     @ti.kernel
@@ -928,39 +928,39 @@ class Mgfbp:
   
 
     @ti.kernel
-    def GenerateDectPixPosArray(self,dect_elem_count_horizontal:ti.i32,dect_elem_count_horizontal_actual:ti.i32,dect_elem_width:ti.f32,\
-                                dect_offset_horizontal:ti.f32,array_u_taichi:ti.template(),dect_elem_begin_idx:ti.i32):
-        # dect_elem_begin_idx is for recon of partial slices of the sinogram
+    def GenerateDectPixPosArray(self,det_elem_count_horizontal:ti.i32,det_elem_count_horizontal_actual:ti.i32,det_elem_width:ti.f32,\
+                                det_offset_horizontal:ti.f32,array_u_taichi:ti.template(),det_elem_begin_idx:ti.i32):
+        # det_elem_begin_idx is for recon of partial slices of the sinogram
         # since the slice idx may not begin with 0
-        for i in ti.ndrange(dect_elem_count_horizontal_actual):
-            array_u_taichi[i] = (i + dect_elem_begin_idx - (dect_elem_count_horizontal - 1) / 2.0) \
-                * dect_elem_width + dect_offset_horizontal
+        for i in ti.ndrange(det_elem_count_horizontal_actual):
+            array_u_taichi[i] = (i + det_elem_begin_idx - (det_elem_count_horizontal - 1) / 2.0) \
+                * det_elem_width + det_offset_horizontal
                 
     @ti.kernel
-    def BHCorrection(self, dect_elem_count_vertical_actual:ti.i32, view_num:ti.i32, dect_elem_count_horizontal:ti.i32,img_sgm_taichi:ti.types.ndarray(dtype=ti.f32, ndim=3),\
+    def BHCorrection(self, det_elem_count_vertical_actual:ti.i32, view_num:ti.i32, det_elem_count_horizontal:ti.i32,img_sgm_taichi:ti.types.ndarray(dtype=ti.f32, ndim=3),\
                      array_bh_coefficients_taichi:ti.template(),bh_corr_order:ti.i32):
         #对正弦图做加权，包括fan beam的cos加权和短扫面加权
-        for  i, j, s in ti.ndrange(view_num, dect_elem_count_horizontal, dect_elem_count_vertical_actual):
+        for  i, j, s in ti.ndrange(view_num, det_elem_count_horizontal, det_elem_count_vertical_actual):
             temp_val = 0.0
             for t in ti.ndrange(bh_corr_order):
                 temp_val = temp_val + array_bh_coefficients_taichi[t] * (img_sgm_taichi[s,i,j]**(t+1))#apply ploynomial calculation
             img_sgm_taichi[s,i,j] = temp_val
 
     @ti.kernel
-    def WeightSgm(self, dect_elem_count_vertical_actual:ti.i32, short_scan:ti.i32, curved_dect:ti.i32, scan_angle:ti.f32,\
-                  view_num:ti.i32, dect_elem_count_horizontal:ti.i32, source_dect_dis:ti.f32,img_sgm_taichi:ti.types.ndarray(dtype=ti.f32, ndim=3),\
+    def WeightSgm(self, det_elem_count_vertical_actual:ti.i32, short_scan:ti.i32, curved_dect:ti.i32, scan_angle:ti.f32,\
+                  view_num:ti.i32, det_elem_count_horizontal:ti.i32, source_det_dis:ti.f32,img_sgm_taichi:ti.types.ndarray(dtype=ti.f32, ndim=3),\
                       array_u_taichi:ti.template(),array_v_taichi:ti.template(),array_angle_taichi:ti.template()):
         #对正弦图做加权，包括fan beam的cos加权和短扫面加权
-        for  i, j in ti.ndrange(view_num, dect_elem_count_horizontal):
+        for  i, j in ti.ndrange(view_num, det_elem_count_horizontal):
             u_actual = array_u_taichi[j]
-            for s in ti.ndrange(dect_elem_count_vertical_actual):
+            for s in ti.ndrange(det_elem_count_vertical_actual):
                 v_actual = array_v_taichi[s]
                 if curved_dect:
-                    img_sgm_taichi[s,i,j] = img_sgm_taichi[s,i,j] * source_dect_dis * ti.math.cos( (-1)*u_actual/source_dect_dis) \
-                        * source_dect_dis / ((source_dect_dis**2 + v_actual**2)**0.5)
+                    img_sgm_taichi[s,i,j] = img_sgm_taichi[s,i,j] * source_det_dis * ti.math.cos( (-1)*u_actual/source_det_dis) \
+                        * source_det_dis / ((source_det_dis**2 + v_actual**2)**0.5)
                 else:
-                    img_sgm_taichi[s,i,j]=(img_sgm_taichi[s,i,j] * source_dect_dis * source_dect_dis ) \
-                        / (( source_dect_dis **2 + u_actual**2 + v_actual **2) ** 0.5)
+                    img_sgm_taichi[s,i,j]=(img_sgm_taichi[s,i,j] * source_det_dis * source_det_dis ) \
+                        / (( source_det_dis **2 + u_actual**2 + v_actual **2) ** 0.5)
                 if short_scan:
                     #for scans longer than 360 degrees but not multiples of 360, we also need to apply parker weighting
                     #for example, for a 600 degrees scan, we also need to apply parker weighting
@@ -971,10 +971,10 @@ class Mgfbp:
                     rotation_direction =  abs(scan_angle) / (scan_angle)
                     gamma = 0.0
                     if curved_dect:
-                        gamma = ((-1) * u_actual / source_dect_dis) * rotation_direction
+                        gamma = ((-1) * u_actual / source_det_dis) * rotation_direction
                         #positive y corresponds to clockwise -> negative gamma
                     else:
-                        gamma = ti.atan2((-1) *u_actual, source_dect_dis) * rotation_direction
+                        gamma = ti.atan2((-1) *u_actual, source_det_dis) * rotation_direction
                     gamma_max = remain_angle - PI
                     #maximum gamma defined by remain angle
                     #calculation of the parker weighting
@@ -1004,60 +1004,60 @@ class Mgfbp:
                     img_sgm_taichi[s,i,j] *= weighting
                 
     @ti.kernel
-    def ConvolveSgmAndKernel(self, dect_elem_count_vertical_actual:ti.i32, view_num:ti.i32, \
-                             dect_elem_count_horizontal:ti.i32, dect_elem_width:ti.f32, img_sgm_taichi:ti.types.ndarray(dtype=ti.f32, ndim=3), \
+    def ConvolveSgmAndKernel(self, det_elem_count_vertical_actual:ti.i32, view_num:ti.i32, \
+                             det_elem_count_horizontal:ti.i32, det_elem_width:ti.f32, img_sgm_taichi:ti.types.ndarray(dtype=ti.f32, ndim=3), \
                                  array_recon_kernel_taichi:ti.template(),array_kernel_gauss_vertical_taichi:ti.template(),\
-                                     dect_elem_height:ti.f32, apply_gauss_vertical:ti.i32,img_sgm_filtered_intermediate_taichi:ti.template(),\
+                                     det_elem_height:ti.f32, apply_gauss_vertical:ti.i32,img_sgm_filtered_intermediate_taichi:ti.template(),\
                                          img_sgm_filtered_taichi:ti.template()):
         #apply filter along vertical direction
-        for i, j, k in ti.ndrange(dect_elem_count_vertical_actual, view_num, dect_elem_count_horizontal):
+        for i, j, k in ti.ndrange(det_elem_count_vertical_actual, view_num, det_elem_count_horizontal):
             temp_val = 0.0
             if apply_gauss_vertical:
                 # if vertical filter is applied, apply vertical filtering and 
                 # save the intermediate result to img_sgm_filtered_intermediate_taichi
-                for n in ti.ndrange(dect_elem_count_vertical_actual):
+                for n in ti.ndrange(det_elem_count_vertical_actual):
                     if i - n <= 10 and  i - n >=-10: #set a 10 pixel threshold to accelerate the program  
                         temp_val += img_sgm_taichi[n, j, k] \
-                            * array_kernel_gauss_vertical_taichi[i + (dect_elem_count_vertical_actual - 1) - n]
-                img_sgm_filtered_intermediate_taichi[i, j, k] = temp_val * dect_elem_height
+                            * array_kernel_gauss_vertical_taichi[i + (det_elem_count_vertical_actual - 1) - n]
+                img_sgm_filtered_intermediate_taichi[i, j, k] = temp_val * det_elem_height
             else:
                 pass
                 
-        for i, j, k in ti.ndrange(dect_elem_count_vertical_actual, view_num, dect_elem_count_horizontal):
+        for i, j, k in ti.ndrange(det_elem_count_vertical_actual, view_num, det_elem_count_horizontal):
             temp_val = 0.0 
             if apply_gauss_vertical:
                 # if vertical filter is applied, use img_sgm_filtered_intermediate_taichi
                 # for horizontal filtering
-                for m in ti.ndrange(dect_elem_count_horizontal):
+                for m in ti.ndrange(det_elem_count_horizontal):
                     temp_val += img_sgm_filtered_intermediate_taichi[i, j, m] \
-                        * array_recon_kernel_taichi[ k + (dect_elem_count_horizontal - 1) - m]
+                        * array_recon_kernel_taichi[ k + (det_elem_count_horizontal - 1) - m]
             else:
                 # if not, use img_sgm_taichi
-                for m in ti.ndrange(dect_elem_count_horizontal):
+                for m in ti.ndrange(det_elem_count_horizontal):
                     temp_val += img_sgm_taichi[i, j, m] \
-                            * array_recon_kernel_taichi[ k + (dect_elem_count_horizontal - 1) - m]
-            img_sgm_filtered_taichi[i, j, k] = temp_val * dect_elem_width
+                            * array_recon_kernel_taichi[ k + (det_elem_count_horizontal - 1) - m]
+            img_sgm_filtered_taichi[i, j, k] = temp_val * det_elem_width
 
     @ti.kernel
-    def ConvolveKernelAndKernel(self, dect_elem_count_horizontal:ti.i32, \
-                                dect_elem_width:ti.f32, array_kernel_ramp_taichi:ti.template(), \
+    def ConvolveKernelAndKernel(self, det_elem_count_horizontal:ti.i32, \
+                                det_elem_width:ti.f32, array_kernel_ramp_taichi:ti.template(), \
                                     array_kernel_gauss_taichi:ti.template(), array_recon_kernel_taichi:ti.template()):
         #当核为高斯核时卷积计算的过程之一
-        for i in ti.ndrange(2 * dect_elem_count_horizontal - 1):
+        for i in ti.ndrange(2 * det_elem_count_horizontal - 1):
             reconKernel_conv_local = 0.0
-            for j in ti.ndrange(2 * dect_elem_count_horizontal - 1):
-                if i - (j - (dect_elem_count_horizontal - 1)) < 0 or i - (j - (dect_elem_count_horizontal - 1)) > 2 * dect_elem_count_horizontal - 2:
+            for j in ti.ndrange(2 * det_elem_count_horizontal - 1):
+                if i - (j - (det_elem_count_horizontal - 1)) < 0 or i - (j - (det_elem_count_horizontal - 1)) > 2 * det_elem_count_horizontal - 2:
                     pass
                 else:
-                    reconKernel_conv_local = reconKernel_conv_local + array_kernel_gauss_taichi[j] * array_kernel_ramp_taichi[i - (j - (dect_elem_count_horizontal - 1))]
-            array_recon_kernel_taichi[i]= reconKernel_conv_local * dect_elem_width  
+                    reconKernel_conv_local = reconKernel_conv_local + array_kernel_gauss_taichi[j] * array_kernel_ramp_taichi[i - (j - (det_elem_count_horizontal - 1))]
+            array_recon_kernel_taichi[i]= reconKernel_conv_local * det_elem_width  
         
     @ti.kernel
-    def BackProjectionPixelDriven(self, dect_elem_count_vertical_actual:ti.i32, img_dim:ti.i32, dect_elem_count_horizontal:ti.i32, \
-                                  view_num:ti.i32, dect_elem_width:ti.f32,\
-                                  img_pix_size:ti.f32, source_isocenter_dis:ti.f32, source_dect_dis:ti.f32,total_scan_angle:ti.f32,\
+    def BackProjectionPixelDriven(self, det_elem_count_vertical_actual:ti.i32, img_dim:ti.i32, det_elem_count_horizontal:ti.i32, \
+                                  view_num:ti.i32, det_elem_width:ti.f32,\
+                                  img_pix_size:ti.f32, source_isocenter_dis:ti.f32, source_det_dis:ti.f32,total_scan_angle:ti.f32,\
                                       array_angle_taichi:ti.template(),img_rot:ti.f32,img_sgm_filtered_taichi:ti.template(),img_recon_taichi:ti.template(),\
-                                          array_u_taichi:ti.template(), short_scan:ti.i32,cone_beam:ti.i32,dect_elem_height:ti.f32,\
+                                          array_u_taichi:ti.template(), short_scan:ti.i32,cone_beam:ti.i32,det_elem_height:ti.f32,\
                                               array_v_taichi:ti.template(),img_dim_z:ti.i32,img_voxel_height:ti.f32, \
                                                   img_center_x:ti.f32,img_center_y:ti.f32,img_center_z:ti.f32,curved_dect:ti.i32,\
                                                       bool_apply_pmatrix:ti.i32, array_pmatrix_taichi:ti.template(), recon_view_mode: ti.i32):
@@ -1106,37 +1106,37 @@ class Mgfbp:
                     pix_to_source_parallel_dis = 0.0
                     mag_factor = 0.0
                     temp_u_idx_floor = 0
-                    pix_proj_to_dect_u = 0.0
-                    pix_proj_to_dect_v = 0.0
-                    pix_proj_to_dect_u_idx = 0.0
-                    pix_proj_to_dect_v_idx = 0.0
+                    pix_proj_to_det_u = 0.0
+                    pix_proj_to_det_v = 0.0
+                    pix_proj_to_det_u_idx = 0.0
+                    pix_proj_to_det_v_idx = 0.0
                     ratio_u = 0.0
                     ratio_v = 0.0
                     angle_this_view_exclude_img_rot = array_angle_taichi[j] - img_rot
                     
                     pix_to_source_parallel_dis = source_isocenter_dis - x * ti.cos(angle_this_view_exclude_img_rot) - y * ti.sin(angle_this_view_exclude_img_rot)
                     if bool_apply_pmatrix == 0:
-                        mag_factor = source_dect_dis / pix_to_source_parallel_dis
+                        mag_factor = source_det_dis / pix_to_source_parallel_dis
                         y_after_rotation_angle_this_view = - x*ti.sin(angle_this_view_exclude_img_rot) + y*ti.cos(angle_this_view_exclude_img_rot)
                         if curved_dect:
-                            pix_proj_to_dect_u = source_dect_dis * ti.atan2(y_after_rotation_angle_this_view, pix_to_source_parallel_dis)
+                            pix_proj_to_det_u = source_det_dis * ti.atan2(y_after_rotation_angle_this_view, pix_to_source_parallel_dis)
                         else:
-                            pix_proj_to_dect_u = mag_factor * y_after_rotation_angle_this_view
-                        pix_proj_to_dect_u_idx = (pix_proj_to_dect_u - array_u_taichi[0]) / (array_u_taichi[1] - array_u_taichi[0])
+                            pix_proj_to_det_u = mag_factor * y_after_rotation_angle_this_view
+                        pix_proj_to_det_u_idx = (pix_proj_to_det_u - array_u_taichi[0]) / (array_u_taichi[1] - array_u_taichi[0])
                     else:
                         mag_factor = 1.0 / (array_pmatrix_taichi[12*j + 8] * x +\
                             array_pmatrix_taichi[12*j + 9] * y +\
                                 array_pmatrix_taichi[12*j + 10] * z +\
                                     array_pmatrix_taichi[12*j + 11] * 1)
-                        pix_proj_to_dect_u_idx = (array_pmatrix_taichi[12*j + 0] * x +\
+                        pix_proj_to_det_u_idx = (array_pmatrix_taichi[12*j + 0] * x +\
                             array_pmatrix_taichi[12*j + 1] * y +\
                                 array_pmatrix_taichi[12*j + 2] * z +\
                                     array_pmatrix_taichi[12*j + 3] * 1) * mag_factor
-                    if pix_proj_to_dect_u_idx < 0 or  pix_proj_to_dect_u_idx + 1 > dect_elem_count_horizontal - 1:
+                    if pix_proj_to_det_u_idx < 0 or  pix_proj_to_det_u_idx + 1 > det_elem_count_horizontal - 1:
                         img_recon_taichi[i_z, i_y, i_x] = 0
                         break
-                    temp_u_idx_floor = int(ti.floor(pix_proj_to_dect_u_idx))
-                    ratio_u = pix_proj_to_dect_u_idx - temp_u_idx_floor
+                    temp_u_idx_floor = int(ti.floor(pix_proj_to_det_u_idx))
+                    ratio_u = pix_proj_to_det_u_idx - temp_u_idx_floor
                                         
                     
                     distance_weight = 0.0
@@ -1149,23 +1149,23 @@ class Mgfbp:
 
                     if cone_beam == True:
                         if bool_apply_pmatrix == 0:
-                            pix_proj_to_dect_v = mag_factor * z
-                            pix_proj_to_dect_v_idx = (pix_proj_to_dect_v - array_v_taichi[0]) / dect_elem_height \
+                            pix_proj_to_det_v = mag_factor * z
+                            pix_proj_to_det_v_idx = (pix_proj_to_det_v - array_v_taichi[0]) / det_elem_height \
                                 * abs(array_v_taichi[1] - array_v_taichi[0]) / (array_v_taichi[1] - array_v_taichi[0])
                                 #abs(array_v_taichi[1] - array_v_taichi[0]) / (array_v_taichi[1] - array_v_taichi[0]) defines whether the first 
                                 #sinogram slice corresponds to the top row
                         else:
-                            pix_proj_to_dect_v_idx = (array_pmatrix_taichi[12*j + 4] * x +\
+                            pix_proj_to_det_v_idx = (array_pmatrix_taichi[12*j + 4] * x +\
                                 array_pmatrix_taichi[12*j + 5] * y +\
                                     array_pmatrix_taichi[12*j + 6] * z +\
                                         array_pmatrix_taichi[12*j + 7] * 1) * mag_factor
                                 
-                        temp_v_idx_floor = int(ti.floor(pix_proj_to_dect_v_idx)) 
-                        if temp_v_idx_floor < 0 or temp_v_idx_floor + 1 > dect_elem_count_vertical_actual - 1:
+                        temp_v_idx_floor = int(ti.floor(pix_proj_to_det_v_idx)) 
+                        if temp_v_idx_floor < 0 or temp_v_idx_floor + 1 > det_elem_count_vertical_actual - 1:
                             img_recon_taichi[i_z, i_y, i_x] = 0
                             break
                         else:
-                            ratio_v = pix_proj_to_dect_v_idx - temp_v_idx_floor
+                            ratio_v = pix_proj_to_det_v_idx - temp_v_idx_floor
                             part_0 = img_sgm_filtered_taichi[temp_v_idx_floor,j,temp_u_idx_floor] * (1 - ratio_u) + \
                                 img_sgm_filtered_taichi[temp_v_idx_floor,j,temp_u_idx_floor + 1] * ratio_u
                             part_1 = img_sgm_filtered_taichi[temp_v_idx_floor + 1,j,temp_u_idx_floor] * (1 - ratio_u) +\
@@ -1194,18 +1194,18 @@ class Mgfbp:
             self.output_path = os.path.join(self.output_dir, self.output_file_prefix + self.output_file)
             #对一些文件命名的处理都遵循的过去程序的命名规
             if self.input_file_form == 'sinogram':
-                file_offset = self.dect_elem_vertical_recon_range_begin * 4 * self.sgm_height * self.dect_elem_count_horizontal
+                file_offset = self.det_elem_vertical_recon_range_begin * 4 * self.sgm_height * self.det_elem_count_horizontal
                 # '4' is size of a float numer in bytes
-                item_count = self.dect_elem_count_vertical_actual * self.sgm_height * self.dect_elem_count_horizontal
+                item_count = self.det_elem_count_vertical_actual * self.sgm_height * self.det_elem_count_horizontal
                 temp_buffer = np.fromfile(self.input_path, dtype = np.float32, offset = file_offset, count = item_count)
-                temp_buffer = temp_buffer.reshape(self.dect_elem_count_vertical_actual,self.sgm_height,self.dect_elem_count_horizontal)
+                temp_buffer = temp_buffer.reshape(self.det_elem_count_vertical_actual,self.sgm_height,self.det_elem_count_horizontal)
             elif self.input_file_form == 'post_log_images':
-                file_offset = self.dect_elem_vertical_recon_range_begin * self.dect_elem_count_horizontal * 4
-                file_gap = (self.dect_elem_vertical_recon_range_begin + self.dect_elem_count_vertical - 1 - self.dect_elem_vertical_recon_range_end)\
-                    * self.dect_elem_count_horizontal * 4
-                temp_buffer = imreadRaw(self.input_path, height = self.dect_elem_count_vertical_actual, width = self.dect_elem_count_horizontal,\
+                file_offset = self.det_elem_vertical_recon_range_begin * self.det_elem_count_horizontal * 4
+                file_gap = (self.det_elem_vertical_recon_range_begin + self.det_elem_count_vertical - 1 - self.det_elem_vertical_recon_range_end)\
+                    * self.det_elem_count_horizontal * 4
+                temp_buffer = imreadRaw(self.input_path, height = self.det_elem_count_vertical_actual, width = self.det_elem_count_horizontal,\
                                          offset = file_offset, gap = file_gap, nSlice = self.sgm_height)
-                #print(self.dect_elem_count_vertical_actual,self.dect_elem_count_horizontal, self.sgm_height)
+                #print(self.det_elem_count_vertical_actual,self.det_elem_count_horizontal, self.sgm_height)
                 temp_buffer = np.transpose(temp_buffer,[1,0,2])
     
                 
@@ -1218,15 +1218,15 @@ class Mgfbp:
             return True
     
     def InitializeSinogramBuffer(self):
-        self.img_sgm = np.zeros((self.dect_elem_count_vertical_actual, self.view_num, self.dect_elem_count_horizontal),dtype = np.float32)
+        self.img_sgm = np.zeros((self.det_elem_count_vertical_actual, self.view_num, self.det_elem_count_horizontal),dtype = np.float32)
               
         ######### initialize taichi components ########
         #img_sgm_filtered_taichi存储卷积后的正弦
-        self.img_sgm_filtered_taichi = ti.field(dtype=ti.f32, shape=(self.dect_elem_count_vertical_actual,self.view_num, self.dect_elem_count_horizontal))
+        self.img_sgm_filtered_taichi = ti.field(dtype=ti.f32, shape=(self.det_elem_count_vertical_actual,self.view_num, self.det_elem_count_horizontal))
         #img_sgm_filtered_taichi 纵向卷积后正弦图的中间结果，then apply horizontal convolution
         
         if self.apply_gauss_vertical:
-            self.img_sgm_filtered_intermediate_taichi = ti.field(dtype=ti.f32, shape=(self.dect_elem_count_vertical_actual,self.view_num, self.dect_elem_count_horizontal))
+            self.img_sgm_filtered_intermediate_taichi = ti.field(dtype=ti.f32, shape=(self.det_elem_count_vertical_actual,self.view_num, self.det_elem_count_horizontal))
         else:
             self.img_sgm_filtered_intermediate_taichi = ti.field(dtype=ti.f32, shape=(1,1,1))
             #if vertical gauss filter is not applied, initialize this intermediate sgm with a small size to save GPU memory
@@ -1234,15 +1234,15 @@ class Mgfbp:
     def InitializeArrays(self):
         #calculate u array; by default, +u is along -y direction
         #by convention, detector_offset_horizontal is along -y direction, we need to multiply -1. 
-        self.GenerateDectPixPosArray(self.dect_elem_count_horizontal,  self.dect_elem_count_horizontal,\
-                                     (self.positive_u_is_positive_y) *self.dect_elem_width, (-1) * self.dect_offset_horizontal,self.array_u_taichi, 0)
+        self.GenerateDectPixPosArray(self.det_elem_count_horizontal,  self.det_elem_count_horizontal,\
+                                     (self.positive_u_is_positive_y) *self.det_elem_width, (-1) * self.det_offset_horizontal,self.array_u_taichi, 0)
         #计算数组v
         if self.cone_beam == True:
-            self.GenerateDectPixPosArray(self.dect_elem_count_vertical,self.dect_elem_count_vertical_actual,\
-                                         (self.positive_v_is_positive_z) *self.dect_elem_height, self.dect_offset_vertical, self.array_v_taichi,
-                                         self.dect_elem_vertical_recon_range_begin)
+            self.GenerateDectPixPosArray(self.det_elem_count_vertical,self.det_elem_count_vertical_actual,\
+                                         (self.positive_v_is_positive_z) *self.det_elem_height, self.det_offset_vertical, self.array_v_taichi,
+                                         self.det_elem_vertical_recon_range_begin)
         else:
-            self.GenerateDectPixPosArray(self.dect_elem_count_vertical,self.dect_elem_count_vertical_actual,\
+            self.GenerateDectPixPosArray(self.det_elem_count_vertical,self.det_elem_count_vertical_actual,\
                                          0,0,self.array_v_taichi,0)
         #计算angle数组    
         self.GenerateAngleArray(self.view_num,self.img_rot,self.total_scan_angle,self.array_angle_taichi) 
@@ -1250,23 +1250,23 @@ class Mgfbp:
     
     def InitializeReconKernel(self):
         if 'HammingFilter' in self.config_dict:
-            self.GenerateHammingKernel(self.dect_elem_count_horizontal,self.dect_elem_width,\
-                                       self.kernel_param,self.source_dect_dis,self.source_isocenter_dis,self.array_recon_kernel_taichi,self.curved_dect, self.dbt_or_not)
+            self.GenerateHammingKernel(self.det_elem_count_horizontal,self.det_elem_width,\
+                                       self.kernel_param,self.source_det_dis,self.source_isocenter_dis,self.array_recon_kernel_taichi,self.curved_dect, self.dbt_or_not)
             #计算hamming核存储在array_recon_kernel_taichi
             
         elif 'GaussianApodizedRamp' in self.config_dict:
-            self.GenerateGassianKernel(self.dect_elem_count_horizontal,self.dect_elem_width,\
+            self.GenerateGassianKernel(self.det_elem_count_horizontal,self.det_elem_width,\
                                        self.kernel_param,self.array_kernel_gauss_taichi)
             #计算高斯核存储在array_kernel_gauss_taichi
-            self.GenerateHammingKernel(self.dect_elem_count_horizontal,self.dect_elem_width,1,\
-                                       self.source_dect_dis,self.source_isocenter_dis,self.array_kernel_ramp_taichi,self.curved_dect, self.dbt_or_not)
+            self.GenerateHammingKernel(self.det_elem_count_horizontal,self.det_elem_width,1,\
+                                       self.source_det_dis,self.source_isocenter_dis,self.array_kernel_ramp_taichi,self.curved_dect, self.dbt_or_not)
             #1.以hamming参数1调用一次hamming核处理运算结果存储在array_kernel_ramp_taichi
-            self.ConvolveKernelAndKernel(self.dect_elem_count_horizontal,self.dect_elem_width,\
+            self.ConvolveKernelAndKernel(self.det_elem_count_horizontal,self.det_elem_width,\
                                          self.array_kernel_ramp_taichi,self.array_kernel_gauss_taichi,self.array_recon_kernel_taichi)
             #2.将计算出来的高斯核array_kernel_gauss_taichi与以hamming参数1计算出来的hamming核array_kernel_ramp_taichi进行一次运算得到新的高斯核存储在array_recon_kernel_taichi
         
-        self.GenerateGassianKernel(self.dect_elem_count_vertical_actual,self.dect_elem_height,\
-                                       self.dect_elem_vertical_gauss_filter_size,self.array_kernel_gauss_vertical_taichi)
+        self.GenerateGassianKernel(self.det_elem_count_vertical_actual,self.det_elem_height,\
+                                       self.det_elem_vertical_gauss_filter_size,self.array_kernel_gauss_vertical_taichi)
 
             
     def FilterSinogram(self):
@@ -1274,9 +1274,9 @@ class Mgfbp:
             self.img_sgm_filtered_taichi.from_numpy(self.img_sgm)
             #non filtration is performed
         else:
-            self.ConvolveSgmAndKernel(self.dect_elem_count_vertical_actual,self.view_num,self.dect_elem_count_horizontal,\
-                                      self.dect_elem_width,self.img_sgm,self.array_recon_kernel_taichi,\
-                                          self.array_kernel_gauss_vertical_taichi,self.dect_elem_height, self.apply_gauss_vertical,
+            self.ConvolveSgmAndKernel(self.det_elem_count_vertical_actual,self.view_num,self.det_elem_count_horizontal,\
+                                      self.det_elem_width,self.img_sgm,self.array_recon_kernel_taichi,\
+                                          self.array_kernel_gauss_vertical_taichi,self.det_elem_height, self.apply_gauss_vertical,
                                           self.img_sgm_filtered_intermediate_taichi, self.img_sgm_filtered_taichi)
             #pass img_sgm directly into this function using unified memory
             #用hamming核计算出的array_recon_kernel_taichi计算卷积后的正弦图img_sgm_filtered_taichi
@@ -1285,7 +1285,7 @@ class Mgfbp:
         if self.save_filtered_sinogram:
             sgm_filtered = self.img_sgm_filtered_taichi.to_numpy()
             sgm_filtered = sgm_filtered.astype(np.float32)
-            imwriteRaw(sgm_filtered,self.output_dir+'/'+ self.output_file +'_sgm_filtered.raw',dtype=np.float32)
+            imwriteTiff(sgm_filtered.transpose(1,0,2),self.output_dir+'/'+ 'sgm_filtered_' + self.output_file,dtype=np.float32)
             del sgm_filtered
 
             
