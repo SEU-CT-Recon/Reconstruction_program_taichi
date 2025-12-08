@@ -8,6 +8,7 @@ import os
 import numpy as np
 import gc
 import math
+from tqdm import *
 from crip.io import imwriteRaw
 from crip.io import imwriteTiff
 import matplotlib.pyplot as plt
@@ -1187,7 +1188,7 @@ class Mgfbp:
             print(f"ERROR: did not file string '{self.output_file_replace[0]}' to replace in '{self.output_file}'")
             sys.exit()
         else:
-            print('\nLoading %s to RAM...' % self.input_path)
+            print('\nLoading %s to RAM ...' % self.input_path)
             if self.output_file_format == 'tif' or self.output_file_format == 'tiff':
                 #to save to tif, '*.raw' need to be changed to '*.tif'
                 self.output_file = re.sub('.raw', '.tif', self.output_file)
@@ -1211,7 +1212,7 @@ class Mgfbp:
                 
             self.img_sgm = temp_buffer[:,0:self.view_num,:]
             self.img_sgm = np.ascontiguousarray(self.img_sgm) #only contiguous arrays can be passed to ti kernel functions
-            
+            sys.stdout.flush()
             del temp_buffer
             #no longer need this: self.img_sgm_taichi.from_numpy(self.img_sgm)
             #since img_sgm can be directly passed to ti kernel functions using unified memory

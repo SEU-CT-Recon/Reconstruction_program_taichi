@@ -28,6 +28,7 @@ def run_mgfbp_v2(file_path):
     ti.init(arch=ti.gpu, device_memory_fraction=0.95)#define device memeory utilization fraction
     print('Performing FBP from MandoCT-Taichi (ver 2.0) ...')
     print('This version reconstruct the image view by view to save GPU memory')
+    sys.stdout.flush()
     # record start time point
     start_time = time.time() 
     #Delete unnecessary warinings
@@ -70,9 +71,9 @@ class Mgfbp_v2(Mgfbp):
                     self.file_processed_count += 1 
                     print('Reconstructing %s ...' % self.input_path)
                     
-                    for view_idx in range(self.view_num):
-                        str = 'Processing view #%4d/%4d' % (view_idx+1, self.view_num)
-                        print('\r' + str, end='')
+                    for view_idx in tqdm(range(self.view_num), desc="Processing view#", ncols=80,miniters=50):
+                        #str = 'Processing view #%4d/%4d' % (view_idx+1, self.view_num)
+                        #print('\r' + str, end='')
                         self.img_sgm_taichi.from_numpy(self.img_sgm[:,view_idx:view_idx+1,:])
                         if self.bool_bh_correction:
                             self.BHCorrection(self.det_elem_count_vertical_actual, self.view_num, self.det_elem_count_horizontal,self.img_sgm_taichi,\

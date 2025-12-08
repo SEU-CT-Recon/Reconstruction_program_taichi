@@ -101,9 +101,9 @@ class Mgfpj_v3(Mgfpj):
                 if self.ReadImage(file):
                     print('\nForward projecting %s ...' % self.input_path)
                     self.file_processed_count += 1
-                    for view_idx in range(self.view_num):
-                        str = 'Forward projecting view: %4d/%4d' % (view_idx+1, self.view_num)
-                        print('\r' + str, end='')
+                    for view_idx in tqdm(range(self.view_num), desc="Forward projecting view #", ncols=80, miniters=50):
+                        #str = 'Forward projecting view: %4d/%4d' % (view_idx+1, self.view_num)
+                        #print('\r' + str, end='')
                         self.ForwardProjectionBilinear(self.img_image_taichi, self.img_sgm_large_taichi, self.array_u_taichi,
                                                        self.array_v_taichi, self.array_angle_taichi, self.img_dim, self.img_dim_z,
                                                        self.det_elem_count_horizontal*self.oversample_size,
