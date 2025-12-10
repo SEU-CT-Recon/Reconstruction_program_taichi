@@ -60,9 +60,9 @@ class Mgfbp_huashi_v2(Mgfbp_v2):
                     self.file_processed_count += 1 
                     print('Reconstructing %s ...' % self.input_path)
                     
-                    for view_idx in range(self.view_num):
-                        str = 'Processing view #%4d/%4d' % (view_idx+1, self.view_num)
-                        print('\r' + str, end='')
+                    for view_idx in tqdm(range(self.view_num), desc="Processing view#", ncols=80,miniters=50):
+                        # str = 'Processing view #%4d/%4d' % (view_idx+1, self.view_num)
+                        # print('\r' + str, end='')
                         self.img_sgm_taichi.from_numpy(self.img_sgm[:,view_idx:view_idx+1,:])
                         if self.bool_bh_correction:
                             self.BHCorrection(self.det_elem_count_vertical_actual, self.view_num, self.det_elem_count_horizontal,self.img_sgm_taichi,\

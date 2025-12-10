@@ -84,9 +84,9 @@ class Mgfpj(Mgfbp):
                 if self.ReadImage(file):
                     print('\nForward projecting %s ...' % self.input_path)
                     self.file_processed_count += 1
-                    for v_idx in range(self.det_elem_vertical_recon_range_begin,self.det_elem_vertical_recon_range_end + 1):
-                        str = 'Forward projecting slice: %4d/%4d' % (v_idx+1, self.det_elem_count_vertical)
-                        print('\r' + str, end='')
+                    for v_idx in tqdm(range(self.det_elem_vertical_recon_range_begin,self.det_elem_vertical_recon_range_end + 1),desc="Forward projecting slice #", ncols=80, miniters=50):
+                        #str = 'Forward projecting slice: %4d/%4d' % (v_idx+1, self.det_elem_count_vertical)
+                        #print('\r' + str, end='')
                         self.ForwardProjectionBilinear(self.img_image_taichi, self.img_sgm_large_taichi, self.array_u_taichi,
                                                        self.array_v_taichi, self.array_angle_taichi, self.img_dim, self.img_dim_z,
                                                        self.det_elem_count_horizontal*self.oversample_size,
