@@ -328,12 +328,18 @@ class Mgfbp:
             sys.exit()
         
         if 'TotalScanAngle' in config_dict:
-            self.total_scan_angle = config_dict['TotalScanAngle'] / 180.0 * PI
+            if isinstance(config_dict['TotalScanAngle'], list): #total scan angle can be a list for test purpose; refer to run_mgfbp_offset_test
+                self.array_total_scan_angle = config_dict['TotalScanAngle']
+                for i in range(len(self.array_total_scan_angle)):
+                    self.array_total_scan_angle[i]  = self.array_total_scan_angle[i] / 180.0 * PI
+                self.total_scan_angle = self.array_total_scan_angle[0] #define total scan angle as the first element of array_total_scan_angle
+            else:
+                self.total_scan_angle = config_dict['TotalScanAngle'] / 180.0 * PI
             # TotalScanAngle is originally in degree; change it to rad
             # all angular variables are in rad unit
         else:
             self.total_scan_angle = 2*PI #by default, scan angle is 2*pi
-        if not isinstance(self.total_scan_angle, float) and not isinstance(self.total_scan_angle, int):
+        if not isinstance(self.total_scan_angle, float) and not isinstance(self.total_scan_angle, int) and not isinstance(self.total_scan_angle, list):
             print("ERROR: TotalScanAngle should be a number!")
             sys.exit()
        

@@ -92,6 +92,9 @@ class Mgfbp_v2(Mgfbp):
                                             self.array_v_taichi,self.img_dim_z,self.img_voxel_height,\
                                                 self.img_center_x,self.img_center_y,self.img_center_z,self.curved_dect,\
                                                     self.bool_apply_pmatrix,self.array_pmatrix_taichi, self.recon_view_mode, view_idx)
+                        # if view_idx %10 == 0:
+                        #     self.img_recon = self.img_recon_taichi.to_numpy()
+                        #     imwriteTiff(self.img_recon, self.output_path+ '_'+ str(view_idx),dtype=np.float32)
     
                     print('\nSaving to %s !' % self.output_path)
                     self.SetTruncatedRegionToZero(self.img_recon_taichi, self.img_dim, self.img_dim_z)

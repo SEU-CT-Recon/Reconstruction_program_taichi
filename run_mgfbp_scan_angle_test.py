@@ -1,5 +1,12 @@
 # -*- coding: utf-8 -*-
 """
+Created on Fri Dec 19 19:20:17 2025
+
+@author: xji
+"""
+
+# -*- coding: utf-8 -*-
+"""
 Created on Fri Apr 26 11:34:06 2024
 
 @author: xji
@@ -52,22 +59,10 @@ def run_mgfbp_offset_test(file_path):
 class Mgfbp_offset_test(Mgfbp):
     def __init__(self,config_dict):
         super(Mgfbp_offset_test,self).__init__(config_dict)
-        
-        if isinstance(self.det_offset_horizontal, list): #if det_offset_horizontal is a list, then perform test for det_offset_horizontal
-            self.array_det_offset_horizontal = self.det_offset_horizontal
-            self.offset_num = len(self.array_det_offset_horizontal)
-            self.count_max = self.offset_num
-            self.det_offset_horizontal = 0
-            self.img_recon_combine = np.zeros((self.img_dim_z*self.offset_num,self.img_dim,self.img_dim),dtype = np.float32)
-            self.test_type = 1 #type 1 means horizontal offset test
-        
-        if hasattr(self, 'array_total_scan_angle'): #if array_total_scan_angle exist, then perform test for total_scan_angle
-            #self.array_total_scan_angle = self.total_scan_angle
-            self.scan_angle_num = len(self.array_total_scan_angle)
-            self.total_scan_angle = 0.0
-            self.img_recon_combine = np.zeros((self.img_dim_z*self.scan_angle_num,self.img_dim,self.img_dim),dtype = np.float32)
-            self.count_max = self.scan_angle_num
-            self.test_type = 2 #type 2 means scan angle test
+        self.array_det_offset_horizontal = self.det_offset_horizontal
+        self.offset_num = len(self.array_det_offset_horizontal)
+        self.det_offset_horizontal = 0
+        self.img_recon_combine = np.zeros((self.img_dim_z*self.offset_num,self.img_dim,self.img_dim),dtype = np.float32)
     
     def MainFunction(self):
         #Main function for reconstruction
@@ -79,12 +74,9 @@ class Mgfbp_offset_test(Mgfbp):
                 if self.ReadSinogram(file):
                     self.file_processed_count +=1 
                     print('\nReconstructing %s ...' % self.input_path)
-                    for test_idx in range(self.count_max):
-                        if self.test_type == 1:
-                            self.det_offset_horizontal = self.array_det_offset_horizontal[test_idx]
-                        elif self.test_type == 2:
-                            self.total_scan_angle = self.array_total_scan_angle[test_idx]
-                        if test_idx == 0:   
+                    for offset_idx in range(self.offset_num):
+                        if offset_idx == 0:
+                            self.det_offset_horizontal = self.array_det_offset_horizontal[offset_idx]
                             self.InitializeArrays()  
                             self.WeightSgm(self.det_elem_count_vertical_actual,self.short_scan,self.curved_dect,\
                                            self.total_scan_angle,self.view_num,self.det_elem_count_horizontal,\
@@ -104,6 +96,7 @@ class Mgfbp_offset_test(Mgfbp):
                                                     self.img_center_x,self.img_center_y,self.img_center_z,self.curved_dect,\
                                                         self.bool_apply_pmatrix,self.array_pmatrix_taichi, self.recon_view_mode)
                         else:
+                            self.det_offset_horizontal = self.array_det_offset_horizontal[offset_idx]
                             self.InitializeArrays()  
                             self.BackProjectionPixelDriven(self.det_elem_count_vertical_actual, self.img_dim, self.det_elem_count_horizontal, \
                                             self.view_num, self.det_elem_width,self.img_pix_size, self.source_isocenter_dis, self.source_det_dis,self.total_scan_angle,\
@@ -113,7 +106,7 @@ class Mgfbp_offset_test(Mgfbp):
                                                     self.img_center_x,self.img_center_y,self.img_center_z,self.curved_dect,\
                                                         self.bool_apply_pmatrix,self.array_pmatrix_taichi, self.recon_view_mode)
                             
-                        self.img_recon_combine[test_idx*self.img_dim_z: (test_idx+1)*self.img_dim_z ,:,:] = self.img_recon_taichi.to_numpy()
+                        self.img_recon_combine[offset_idx*self.img_dim_z: (offset_idx+1)*self.img_dim_z ,:,:] = self.img_recon_taichi.to_numpy()
     
                     print('Saving to %s !' % self.output_path)
                     self.SaveReconImg()
