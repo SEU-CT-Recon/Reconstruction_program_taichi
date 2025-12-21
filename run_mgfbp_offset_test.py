@@ -55,18 +55,16 @@ class Mgfbp_offset_test(Mgfbp):
         
         if isinstance(self.det_offset_horizontal, list): #if det_offset_horizontal is a list, then perform test for det_offset_horizontal
             self.array_det_offset_horizontal = self.det_offset_horizontal
-            self.offset_num = len(self.array_det_offset_horizontal)
-            self.count_max = self.offset_num
-            self.det_offset_horizontal = 0
-            self.img_recon_combine = np.zeros((self.img_dim_z*self.offset_num,self.img_dim,self.img_dim),dtype = np.float32)
+            self.count_max = len(self.array_det_offset_horizontal)
+            self.det_offset_horizontal = 0.0 
+            self.img_recon_combine = np.zeros((self.img_dim_z*self.count_max,self.img_dim,self.img_dim),dtype = np.float32)
             self.test_type = 1 #type 1 means horizontal offset test
         
         if hasattr(self, 'array_total_scan_angle'): #if array_total_scan_angle exist, then perform test for total_scan_angle
             #self.array_total_scan_angle = self.total_scan_angle
-            self.scan_angle_num = len(self.array_total_scan_angle)
+            self.count_max = len(self.array_total_scan_angle)
             self.total_scan_angle = 0.0
-            self.img_recon_combine = np.zeros((self.img_dim_z*self.scan_angle_num,self.img_dim,self.img_dim),dtype = np.float32)
-            self.count_max = self.scan_angle_num
+            self.img_recon_combine = np.zeros((self.img_dim_z*self.count_max,self.img_dim,self.img_dim),dtype = np.float32)
             self.test_type = 2 #type 2 means scan angle test
     
     def MainFunction(self):
