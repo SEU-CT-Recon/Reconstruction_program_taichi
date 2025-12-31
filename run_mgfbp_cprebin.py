@@ -64,19 +64,14 @@ class Mgfbp_cprebin(Mgfbp_v2):
         self.positive_u_is_positive_y = 1
         self.InitializeSinogramBuffer() #initialize sinogram buffer
         self.InitializeArrays() #initialize arrays
-        A = self.array_rho_taichi.to_numpy()
         self.InitializeReconKernel() #initialize reconstruction kernel
-        A = self.array_recon_kernel_taichi.to_numpy()
-        plt.plot(A)
         self.file_processed_count = 0;#record the number of files processed
         for file in os.listdir(self.input_dir):
             if re.match(self.input_files_pattern, file):#match the file pattern
                 if self.ReadSinogram(file):
                     self.file_processed_count += 1 
                     print('Reconstructing %s ...' % self.input_path)
-                    for row_idx in range(self.det_elem_count_vertical_actual):
-                        str = 'Rebinning detector row #%4d/%4d' % (row_idx+1, self.det_elem_count_vertical_actual)
-                        print('\r' + str, end='')
+                    for row_idx in tqdm(range(self.det_elem_count_vertical_actual), desc="Rebinning detector row#", ncols=80, miniters=50):
                         self.img_sgm_taichi.from_numpy(self.img_sgm[row_idx:row_idx+1,:,:])
                         self.ConeParallelRebin(self.curved_dect,self.total_scan_angle,self.view_num,self.det_elem_count_horizontal,self.det_elem_count_horizontal_rebin,self.source_isocenter_dis,\
                                                self.source_det_dis, self.img_sgm_taichi, self.array_u_taichi, self.array_v_taichi, self.array_angle_taichi,\
@@ -85,9 +80,7 @@ class Mgfbp_cprebin(Mgfbp_v2):
                         
                     
                     print('\n')
-                    for view_idx in range(self.view_num):
-                        str = 'Filtering and reconstructing view #%4d/%4d' %(view_idx+1, self.view_num)
-                        print('\r' + str, end='')
+                    for view_idx in tqdm(range(self.view_num), desc="Filtering and reconstructing view#", ncols = 120, miniters = 50):
                         self.img_sgm_rebin_taichi_each_view.from_numpy(self.img_sgm_rebin[:,view_idx:view_idx+1,:])
                         if self.bool_bh_correction:
                             self.BHCorrection(self.det_elem_count_vertical_actual, self.view_num, self.det_elem_count_horizontal_rebin,self.img_sgm_rebin_taichi_each_view,\
@@ -103,7 +96,7 @@ class Mgfbp_cprebin(Mgfbp_v2):
                                         self.array_rho_taichi,self.short_scan,self.cone_beam,self.det_elem_height,\
                                             self.array_v_taichi,self.img_dim_z,self.img_voxel_height,\
                                                 self.img_center_x,self.img_center_y,self.img_center_z,self.curved_dect,\
-                                                    self.bool_apply_pmatrix,self.array_pmatrix_taichi, self.recon_view_mode, view_idx)
+                                                    self.bool_apply_pmatrix,self.array_pmatrix_taichi, self.recon_view_mode, view_idx,self.helical_pitch)
                     self.SaveFilteredSinogram()
                     imwriteTiff(self.img_sgm_rebin_taichi_each_view.to_numpy().transpose(1,0,2),self.output_dir+'/'+ 'sgm_rebin_' + self.output_file,dtype=np.float32)
                     print('\nSaving to %s !' % self.output_path)
@@ -113,6 +106,22 @@ class Mgfbp_cprebin(Mgfbp_v2):
     def __init__(self,config_dict):
         super(Mgfbp_v2,self).__init__(config_dict)
         self.img_recon_taichi.from_numpy(self.img_recon) #initialize img_recon_taichi (all-zero array)
+        if 'HelicalPitch' in config_dict:
+            self.helical_scan = True
+            self.helical_pitch = config_dict['HelicalPitch']
+            print('--Helical scan')
+        else:
+            self.helical_scan = False
+            self.helical_pitch = 0.0
+
+        if (self.helical_scan):
+            #if ImageCenterZ is not defined or is wrongly auto set from mgfbp
+            if ('ImageCenterZ' not in config_dict) or (self.img_center_z_auto_set_from_fbp): 
+                self.img_center_z = self.img_voxel_height * \
+                    (self.img_dim_z - 1) / 2.0 * np.sign(self.helical_pitch)
+                print("Warning: ImageCenterZ is not in the config file or is wrongly set from run_mgfbp!")
+                print("For helical scans, the first view begins with the bottom or the top of the image object;")
+                print("ImageCenterZ is re-set accordingly to be %.1f mm!" %self.img_center_z)
         
     @ti.kernel
     def BackProjectionPixelDriven(self, det_elem_count_vertical_actual:ti.i32, img_dim:ti.i32, det_elem_count_horizontal:ti.i32, \
@@ -122,7 +131,7 @@ class Mgfbp_cprebin(Mgfbp_v2):
                                           array_u_taichi:ti.template(), short_scan:ti.i32,cone_beam:ti.i32,det_elem_height:ti.f32,\
                                               array_v_taichi:ti.template(),img_dim_z:ti.i32,img_voxel_height:ti.f32, \
                                                   img_center_x:ti.f32,img_center_y:ti.f32,img_center_z:ti.f32,curved_dect:ti.i32,\
-                                                      bool_apply_pmatrix:ti.i32, array_pmatrix_taichi:ti.template(), recon_view_mode: ti.i32, view_idx:ti.i32):
+                                                      bool_apply_pmatrix:ti.i32, array_pmatrix_taichi:ti.template(), recon_view_mode: ti.i32, view_idx:ti.i32, helical_pitch:ti.f32):
         
         #计算冗余加权系数
         div_factor = 1.0
@@ -137,6 +146,13 @@ class Mgfbp_cprebin(Mgfbp_v2):
                 div_factor = 1.0 / (num_rounds*2.0 + 1.0)
         else:
             div_factor = 1.0 / (num_rounds*2.0)
+        
+        #calculate the distance that the gantry moves between adjacent views
+        z_dis_per_view = 0.0
+        if self.helical_scan:
+            num_laps = abs(total_scan_angle) / (PI * 2)
+            z_dis_per_view = helical_pitch * (num_laps / view_num) * (abs(
+                array_v_taichi[1] - array_v_taichi[0]) * det_elem_count_vertical_actual) / (source_det_dis / source_isocenter_dis)
         
         for i_x, i_y, i_z in ti.ndrange(img_dim, img_dim, img_dim_z):
             #img_recon_taichi[i_z, i_y, i_x] = 0.0 this must be comment since we do not set image recon to zero for each view
@@ -175,30 +191,50 @@ class Mgfbp_cprebin(Mgfbp_v2):
             ratio_v = 0.0
             angle_this_view_exclude_img_rot = array_angle_taichi[view_idx] - img_rot
             
+            conjugate_angle_weight = 0.0
+            for sub_angle_idx in range(-5,5):
+                angle_this_view_exclude_img_rot_sub_angle = angle_this_view_exclude_img_rot + sub_angle_idx * PI
+                pix_proj_to_det_rho = x * ti.sin(angle_this_view_exclude_img_rot_sub_angle) - y* ti.cos(angle_this_view_exclude_img_rot_sub_angle)
+                pix_proj_to_det_rho_idx = (pix_proj_to_det_rho - array_u_taichi[0]) / (array_u_taichi[1] - array_u_taichi[0])
+                rho_idx_floor = int(ti.floor(pix_proj_to_det_rho_idx))
+                
+                gamma_temp = ti.asin( pix_proj_to_det_rho/ source_isocenter_dis)
+                source_to_det_pix_dis_in_xy = source_det_dis / ti.cos(gamma_temp) #curved detector is different
+                source_to_voxel_dis_in_xy = source_isocenter_dis * ti.cos(gamma_temp) - x * ti.cos(angle_this_view_exclude_img_rot) - y * ti.sin(angle_this_view_exclude_img_rot)
+                mag_factor = source_to_det_pix_dis_in_xy / source_to_voxel_dis_in_xy
+                pix_proj_to_det_v = mag_factor * (z - z_dis_per_view * (view_idx + sub_angle_idx * PI / delta_angle  ) ) #incorporate movement of source
+                pix_proj_to_det_v_idx = (pix_proj_to_det_v - array_v_taichi[0]) / (array_v_taichi[1] - array_v_taichi[0])
+                v_idx_floor = int(ti.floor(pix_proj_to_det_v_idx))
+                
+                if v_idx_floor >=0 and  v_idx_floor <= det_elem_count_vertical_actual-2:
+                        conjugate_angle_weight  = conjugate_angle_weight + 1.0
+            
             pix_proj_to_det_rho = x * ti.sin(angle_this_view_exclude_img_rot) - y* ti.cos(angle_this_view_exclude_img_rot)
             pix_proj_to_det_rho_idx = (pix_proj_to_det_rho - array_u_taichi[0]) / (array_u_taichi[1] - array_u_taichi[0])
-            rho_idx_floor = ti.floor(pix_proj_to_det_rho_idx)
+            rho_idx_floor = int(ti.floor(pix_proj_to_det_rho_idx))
             
             gamma_temp = ti.asin( pix_proj_to_det_rho/ source_isocenter_dis)
             source_to_det_pix_dis_in_xy = source_det_dis / ti.cos(gamma_temp) #curved detector is different
             source_to_voxel_dis_in_xy = source_isocenter_dis * ti.cos(gamma_temp) - x * ti.cos(angle_this_view_exclude_img_rot) - y * ti.sin(angle_this_view_exclude_img_rot)
             mag_factor = source_to_det_pix_dis_in_xy / source_to_voxel_dis_in_xy
-            pix_proj_to_det_v = mag_factor * z
+            pix_proj_to_det_v = mag_factor * (z - z_dis_per_view * view_idx) #incorporate movement of source
             pix_proj_to_det_v_idx = (pix_proj_to_det_v - array_v_taichi[0]) / (array_v_taichi[1] - array_v_taichi[0])
-            v_idx_floor = ti.floor(pix_proj_to_det_v_idx)
+            v_idx_floor = int(ti.floor(pix_proj_to_det_v_idx))
+            
             
             if rho_idx_floor >=0 and  rho_idx_floor <= det_elem_count_horizontal-2:
                 if v_idx_floor >=0 and  v_idx_floor <= det_elem_count_vertical_actual-2:
-                    img_recon_taichi[i_z, i_y, i_x] += img_sgm_filtered_taichi[v_idx_floor,0,rho_idx_floor] * delta_angle
+                    img_recon_taichi[i_z, i_y, i_x] += img_sgm_filtered_taichi[v_idx_floor, 0, rho_idx_floor] * delta_angle/conjugate_angle_weight 
             else:
                 img_recon_taichi[i_z, i_y, i_x] = -10000
+
         
     @ti.kernel
     def WeightSgm(self, det_elem_count_vertical_actual:ti.i32, short_scan:ti.i32, curved_dect:ti.i32, scan_angle:ti.f32,\
                   view_num:ti.i32, det_elem_count_horizontal:ti.i32,source_isocenter_dis:ti.f32, source_det_dis:ti.f32,img_sgm_taichi:ti.template(),\
                       array_rho_taichi:ti.template(),array_v_taichi:ti.template(),array_angle_taichi:ti.template(), view_idx:ti.i32):
         #对正弦图做加权，包括fan beam的cos加权和短扫描加权
-        for   j in ti.ndrange(det_elem_count_horizontal):
+        for j in ti.ndrange(det_elem_count_horizontal):
             u_actual = array_rho_taichi[j]
             for s in ti.ndrange(det_elem_count_vertical_actual):
                 v_actual = array_v_taichi[s]
@@ -209,24 +245,26 @@ class Mgfbp_cprebin(Mgfbp_v2):
                     img_sgm_taichi[s,0,j]=(img_sgm_taichi[s,0,j] * source_det_dis / ti.cos(gamma_temp) ) \
                         / ((  (source_det_dis / ti.cos(gamma_temp))**2 + v_actual **2) ** 0.5)
         
-    def InitializeReconKernel(self):
+    def InitializeReconKernel(self): #new definition of recon kernel since we are processing cone parallel geometry
         self.array_recon_kernel_taichi = ti.field(dtype=ti.f32, shape=2*self.det_elem_count_horizontal_rebin-1)
         if 'HammingFilter' in self.config_dict:
             self.GenerateHammingKernel(self.det_elem_count_horizontal_rebin,self.det_elem_width_rebin,\
                                        self.kernel_param,1e10,1e10,self.array_recon_kernel_taichi,self.curved_dect, self.dbt_or_not)
-            #计算hamming核存储在array_recon_kernel_taichi
+            #sid and sdd values are set to be very large to mimic parallel beam
             
         elif 'GaussianApodizedRamp' in self.config_dict:
+            self.array_kernel_ramp_taichi = ti.field(dtype=ti.f32, shape=2*self.det_elem_count_horizontal_rebin-1)
+            self.array_kernel_gauss_taichi = ti.field(dtype=ti.f32, shape=2*self.det_elem_count_horizontal_rebin-1)
+            #reinitialize two kernels with correct lengths
             self.GenerateGassianKernel(self.det_elem_count_horizontal_rebin,self.det_elem_width_rebin,\
                                        self.kernel_param,self.array_kernel_gauss_taichi)
-            #计算高斯核存储在array_kernel_gauss_taichi
+ 
             self.GenerateHammingKernel(self.det_elem_count_horizontal_rebin,self.det_elem_width_rebin,1,\
                                        1e10,1e10,self.array_kernel_ramp_taichi,self.curved_dect, self.dbt_or_not)
-            #1.以hamming参数1调用一次hamming核处理运算结果存储在array_kernel_ramp_taichi
+ 
             self.ConvolveKernelAndKernel(self.det_elem_count_horizontal_rebin,self.det_elem_width_rebin,\
                                          self.array_kernel_ramp_taichi,self.array_kernel_gauss_taichi,self.array_recon_kernel_taichi)
-            #2.将计算出来的高斯核array_kernel_gauss_taichi与以hamming参数1计算出来的hamming核array_kernel_ramp_taichi进行一次运算得到新的高斯核存储在array_recon_kernel_taichi
-        
+ 
         self.GenerateGassianKernel(self.det_elem_count_vertical_actual,self.det_elem_height,\
                                        self.det_elem_vertical_gauss_filter_size,self.array_kernel_gauss_vertical_taichi)
     
@@ -240,9 +278,9 @@ class Mgfbp_cprebin(Mgfbp_v2):
             gamma_temp = ti.asin(array_rho_taichi[rho_idx]/source_iso_dis)
             beta_temp = array_angle_taichi[view_idx] - gamma_temp
             if beta_temp<0:
-                beta_temp = beta_temp + 2*PI
+                beta_temp = beta_temp #+ 2*PI #mark
             elif beta_temp > 2*PI:
-                beta_temp = beta_temp - 2*PI
+                beta_temp = beta_temp #- 2*PI #mark
             u_temp = 0.0
             if curved_dect:
                 u_temp = source_det_dis * gamma_temp
@@ -250,8 +288,8 @@ class Mgfbp_cprebin(Mgfbp_v2):
                 u_temp = source_det_dis * ti.tan(gamma_temp)
             u_idx = (u_temp - array_u_taichi[0]) / ( array_u_taichi[1] -  array_u_taichi[0])
             beta_idx = (beta_temp - array_angle_taichi[0]) / ( array_angle_taichi[1] -  array_angle_taichi[0])
-            u_idx_floor = ti.floor(u_idx)
-            beta_idx_floor = ti.floor(beta_idx)
+            u_idx_floor = int(ti.floor(u_idx))
+            beta_idx_floor = int(ti.floor(beta_idx))
             ratio_u = u_idx - u_idx_floor
             ratio_beta = beta_idx - beta_idx_floor
             if u_idx_floor >=0 and u_idx_floor <= det_elem_count_horizontal - 2:
@@ -268,7 +306,7 @@ class Mgfbp_cprebin(Mgfbp_v2):
         self.img_sgm =  np.zeros((self.det_elem_count_vertical_actual, self.view_num, self.det_elem_count_horizontal), dtype = np.float32)
         self.img_sgm_taichi = ti.field(dtype=ti.f32, shape=(1,self.view_num, self.det_elem_count_horizontal))
         
-        self.det_elem_count_horizontal_rebin =  self.det_elem_count_horizontal *  3
+        self.det_elem_count_horizontal_rebin =  self.det_elem_count_horizontal *  2
         
         self.gamma_max = np.arctan((self.det_elem_count_horizontal * self.det_elem_width / 2.0 + abs(self.det_offset_horizontal)) / self.source_det_dis)
         self.det_elem_width_rebin = np.sin(self.gamma_max) * self.source_isocenter_dis * 2 / (self.det_elem_count_horizontal_rebin)
