@@ -217,13 +217,13 @@ class Mgfbp_ir(Mgfpj_v3):
             self.img_d = self.img_r + beta * self.img_d
             
 
-            if self.num_iter_runned%3==0:
+            if self.num_iter_runned%1==0:
                 if self.convert_to_HU:
+                    #plt.figure(dpi=300)
+                    #plt.imshow((img_output[:,:,int(round(self.img_dim/2))]/ self.water_mu - 1)*1000,cmap = 'gray',vmin = -50, vmax = 50)
+                    #plt.show()
                     plt.figure(dpi=300)
-                    plt.imshow((img_output[:,:,int(round(self.img_dim/2))]/ self.water_mu - 1)*1000,cmap = 'gray',vmin = -50, vmax = 50)
-                    plt.show()
-                    plt.figure(dpi=300)
-                    plt.imshow((img_output[int(round(self.img_dim_z/2)),:,:]/ self.water_mu - 1)*1000,cmap = 'gray',vmin = -50, vmax = 50)
+                    plt.imshow((img_output[int(round(self.img_dim_z/2)),:,:]/ self.water_mu - 1)*1000,cmap = 'gray',vmin = -1400, vmax = 600)
                     #plt.imshow((self.img_x[0,:,:]/ self.water_mu - 1)*1000,cmap = 'gray',vmin = -30, vmax = 100)
                     plt.show()
                     

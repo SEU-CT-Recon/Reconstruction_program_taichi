@@ -902,14 +902,14 @@ class Mgfbp:
             
             # #modified ramp for DBT
             if dbt_or_not == 1:
-                k_t = 0.01 / (2 * (det_elem_width ))
+                k_t = 0.02 / (2 * (det_elem_width))
                 if n == 0:
-                    array_recon_kernel_taichi[i] += k_t ** 2 * source_isocenter_dis / source_det_dis 
+                    array_recon_kernel_taichi[i] += k_t ** 2 # * source_isocenter_dis / source_det_dis 
                     # add this * source_isocenter_dis / source_det_dis factor so that images with different magnification look the same
-                    # there is an 1/source_det_dis factor factor in the weightsgm function
+                    # there is an 1/source_det_dis factor in the weightsgm function
                 else:
                     temp_val = n * det_elem_width * k_t * PI
-                    array_recon_kernel_taichi[i] += (ti.sin(temp_val) **2) / ((temp_val) **2) * (k_t **2) * source_isocenter_dis / source_det_dis
+                    array_recon_kernel_taichi[i] += (ti.sin(temp_val) **2) / ((temp_val) **2) * (k_t **2)# * source_isocenter_dis / source_det_dis
             else:
                 pass
             
