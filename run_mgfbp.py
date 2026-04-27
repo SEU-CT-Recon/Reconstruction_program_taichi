@@ -1188,10 +1188,13 @@ class Mgfbp:
     
     def ReadSinogram(self,file):
         self.input_path = os.path.join(self.input_dir, file)
-        self.output_file = re.sub(self.output_file_replace[0], self.output_file_replace[1], file)
+        self.output_file = file
+        for i in range(int(len(self.output_file_replace)/2)):
+            self.output_file = re.sub(self.output_file_replace[2*i], self.output_file_replace[2*i+1], self.output_file)
         if self.output_file == file:
             #did not find the string in file, so that output_file and file are the same
-            print(f"ERROR: did not file string '{self.output_file_replace[0]}' to replace in '{self.output_file}'")
+            #print(f"ERROR: did not file string '{self.output_file_replace[0]}' to replace in '{self.output_file}'")
+            print(f"ERROR: did not file string to replace in '{self.output_file}'")
             sys.exit()
         else:
             print('\nLoading %s to RAM ...' % self.input_path)
