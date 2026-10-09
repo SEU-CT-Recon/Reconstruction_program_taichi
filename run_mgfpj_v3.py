@@ -50,6 +50,7 @@ def run_mgfpj_v3(file_path):
     print('Add PMatrix forward projection option.' )
     print('View by view forward projection with arbitrary view angle and z position. ')
     print('Is not fully compatible with mgfpj.exe. ')
+    print('Only this version has parallel projection option')
     # record start time point
     start_time = time.time()
     # Delete unnecessary warinings
@@ -234,6 +235,17 @@ class Mgfpj_v3(Mgfpj):
         # upper range for the line integral
         l_max = sid + (2 * img_dimension ** 2 +\
                        image_dimension_z ** 2)**0.5 / 2.0
+            
+            
+        #if l_min is very close to sid, then treat as parallel beam
+        #When sid is very large, sid - l_min may approach the precision limit of 
+        #float 32 values. 
+        approximate_as_parallel = False
+        if (l_min-sid)/sid < 1e-3:
+            approximate_as_parallel = True
+        else:
+            approximate_as_parallel = False
+            
         voxel_diagonal_size = (2*(img_pix_size ** 2) +\
                                (img_voxel_height ** 2))**0.5
         sgm_val_lowerslice = sgm_val_upperslice = 0.0
@@ -272,7 +284,7 @@ class Mgfpj_v3(Mgfpj):
             #distance between the source and the detector element
             source_det_elem_dis = ((det_elem_pos_x - source_pos_x)**2 + (
                 det_elem_pos_y - source_pos_y)**2 + (det_elem_pos_z - source_pos_z)**2) ** 0.5
-            #calculate the unit vector of \vec(x_d - x_s)
+            #calculate the unit vector of vec(x_d - x_s)
             unit_vec_lambda_x = (det_elem_pos_x - source_pos_x) / source_det_elem_dis
             unit_vec_lambda_y = (det_elem_pos_y - source_pos_y) / source_det_elem_dis
             unit_vec_lambda_z = (det_elem_pos_z - source_pos_z) / source_det_elem_dis
@@ -306,19 +318,32 @@ class Mgfpj_v3(Mgfpj):
                     x_p * ti.sin(array_angle_taichi[0])#incorporate the image rotation angle into pmatrix
                 z_rot_p = z_p 
                 
-                #for none-pmatrix case                          
-                x = source_pos_x + unit_vec_lambda_x * \
-                    (step_idx * fpj_step_size * voxel_diagonal_size + l_min)
-                y = source_pos_y + unit_vec_lambda_y * \
-                    (step_idx * fpj_step_size * voxel_diagonal_size + l_min)
-                z = source_pos_z + unit_vec_lambda_z * \
-                    (step_idx * fpj_step_size * voxel_diagonal_size + l_min)
+                #for none-pmatrix case
+                x_1 = 0.0
+                y_1 = 0.0
+                z_1 = 0.0
+                if approximate_as_parallel:  
+                    x_1 = (2 * img_dimension ** 2 + image_dimension_z ** 2)**0.5 / 2.0 - step_idx * fpj_step_size * voxel_diagonal_size
+                    y_1 = det_elem_pos_y
+                    z_1 = det_elem_pos_z 
+                else:
+                    x_1 = source_pos_x + unit_vec_lambda_x * \
+                        (step_idx * fpj_step_size * voxel_diagonal_size + l_min)
+                    y_1 = source_pos_y + unit_vec_lambda_y * \
+                        (step_idx * fpj_step_size * voxel_diagonal_size + l_min)
+                    z_1 = source_pos_z + unit_vec_lambda_z * \
+                        (step_idx * fpj_step_size * voxel_diagonal_size + l_min) 
+                #take the values of x_1 y_1 and z_1 to x y and z        
+                x = x_1 
+                y = y_1
+                z = z_1
+                    
                 x_rot_np = x * ti.cos(array_angle_taichi[angle_idx]) - \
                     y * ti.sin(array_angle_taichi[angle_idx])
                 y_rot_np = y * ti.cos(array_angle_taichi[angle_idx]) + \
                     x * ti.sin(array_angle_taichi[angle_idx])
                 z_rot_np = z
-                
+                    
                 x_rot = x_rot_p * bool_apply_pmatrix + x_rot_np *(1 - bool_apply_pmatrix)
                 y_rot = y_rot_p * bool_apply_pmatrix + y_rot_np *(1 - bool_apply_pmatrix)
                 z_rot = z_rot_p * bool_apply_pmatrix + z_rot_np *(1 - bool_apply_pmatrix)
